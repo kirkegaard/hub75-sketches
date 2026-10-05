@@ -6,11 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Each show runs HOLD_FRAMES at the window's 30 fps (30 seconds), then
-   the lit pixels travel into the next sketch over MORPH_FRAMES (2 seconds).
+/* Each sketch holds for HOLD_FRAMES at the window's 30 fps (10 seconds),
+   then lit dots morph for MORPH_FRAMES (2 seconds).
    PLAYLIST_HOLD_FRAMES and PLAYLIST_MORPH_FRAMES override those. */
 
-#define HOLD_FRAMES 150
+#define HOLD_FRAMES 300
 #define MORPH_FRAMES 60
 
 typedef void (*sketch_fn)(void);
@@ -21,48 +21,26 @@ void lattice_setup(void);
 void lattice_draw(void);
 void steps_setup(void);
 void steps_draw(void);
-void cube2_setup(void);
-void cube2_draw(void);
-void twister_setup(void);
-void twister_draw(void);
-void raster_setup(void);
-void raster_draw(void);
-void gray_setup(void);
-void gray_draw(void);
-void squares_setup(void);
-void squares_draw(void);
-void hex_setup(void);
-void hex_draw(void);
-void pulse_setup(void);
-void pulse_draw(void);
-void bounce_setup(void);
-void bounce_draw(void);
-void gameboy_setup(void);
-void gameboy_draw(void);
-void gradient_setup(void);
-void gradient_draw(void);
+void triangle_setup(void);
+void triangle_draw(void);
+void cube_setup(void);
+void cube_draw(void);
 
-static const struct {
+typedef struct Show {
   const char *name;
   sketch_fn setup;
   sketch_fn draw;
-} kShows[] = {
+} Show;
+
+static const Show shows[] = {
     {"drift", drift_setup, drift_draw},
+    {"cube", cube_setup, cube_draw},
     {"lattice", lattice_setup, lattice_draw},
     {"steps", steps_setup, steps_draw},
-    {"cube2", cube2_setup, cube2_draw},
-    {"twister", twister_setup, twister_draw},
-    {"raster", raster_setup, raster_draw},
-    {"gray", gray_setup, gray_draw},
-    {"squares", squares_setup, squares_draw},
-    {"hex", hex_setup, hex_draw},
-    {"pulse", pulse_setup, pulse_draw},
-    {"bounce", bounce_setup, bounce_draw},
-    {"gameboy", gameboy_setup, gameboy_draw},
-    {"gradient", gradient_setup, gradient_draw},
+    {"triangle", triangle_setup, triangle_draw},
 };
 
-static const int kShowCount = (int)(sizeof kShows / sizeof kShows[0]);
+static const int show_count = (int)(sizeof shows / sizeof shows[0]);
 
 typedef struct Dot {
   int16_t x;
@@ -73,190 +51,266 @@ typedef struct Dot {
 static int hold_frames = HOLD_FRAMES;
 static int morph_frames = MORPH_FRAMES;
 static int show_index = 0;
-static int morph_next = 0;
-static int showing = 1;
-static int tick = 0;
+static int next_show = 0;
+static int morphing = 0;
+static int hold_tick = 0;
+static int morph_tick = 0;
 
-static uint16_t *src_img = NULL;
-static uint16_t *dst_img = NULL;
+static uint16_t *src_image = NULL;
+static uint16_t *dst_image = NULL;
 static Dot *src_dots = NULL;
 static Dot *dst_dots = NULL;
-static int src_n = 0;
-static int dst_n = 0;
+static int src_count = 0;
+static int dst_count = 0;
 
-static int env_frames(const char *name, int fallback) {
+static int frames_from_env(const char *name, int fallback) {
   const char *text = getenv(name);
   int value;
 
   if (!text || text[0] == '\0') {
     return fallback;
   }
+
   value = atoi(text);
+
   if (value < 1) {
     return fallback;
   }
+
   return value;
 }
 
-static int cmp_dot(const void *va, const void *vb) {
-  const Dot *a = va;
-  const Dot *b = vb;
+static int compare_row_then_column(const void *left, const void *right) {
+  const Dot *a = left;
+  const Dot *b = right;
+
   if (a->y != b->y) {
     return (int)a->y - (int)b->y;
   }
+
   return (int)a->x - (int)b->x;
 }
 
-static int collect(const uint16_t *img, Dot **out) {
-  int count = width * height;
-  int n = 0;
+static int collect_lit_dots(const uint16_t *image, Dot **dots_out) {
+  int pixel_count = width * height;
+  int lit = 0;
+  int written = 0;
   int i;
-  int w = 0;
   Dot *dots;
 
-  for (i = 0; i < count; i++) {
-    if (img[i] != 0) {
-      n++;
+  for (i = 0; i < pixel_count; i++) {
+    if (image[i] != 0) {
+      lit++;
     }
   }
-  if (n < 1) {
-    n = 1;
+
+  if (lit == 0) {
+    free(*dots_out);
+    *dots_out = NULL;
+    return 0;
   }
-  dots = (Dot *)malloc((size_t)n * sizeof(Dot));
+
+  dots = (Dot *)malloc((size_t)lit * sizeof(Dot));
+
   if (!dots) {
     return 0;
   }
-  for (i = 0; i < count; i++) {
-    if (img[i] == 0) {
+
+  for (i = 0; i < pixel_count; i++) {
+    if (image[i] == 0) {
       continue;
     }
-    dots[w].x = (int16_t)(i % width);
-    dots[w].y = (int16_t)(i / width);
-    dots[w].color = img[i];
-    w++;
+
+    dots[written].x = (int16_t)(i % width);
+    dots[written].y = (int16_t)(i / width);
+    dots[written].color = image[i];
+    written++;
   }
-  if (w == 0) {
-    dots[0].x = (int16_t)(width / 2);
-    dots[0].y = (int16_t)(height / 2);
-    dots[0].color = 0;
-    w = 1;
-  }
-  qsort(dots, (size_t)w, sizeof(Dot), cmp_dot);
-  free(*out);
-  *out = dots;
-  return w;
+
+  qsort(dots, (size_t)written, sizeof(Dot), compare_row_then_column);
+  free(*dots_out);
+  *dots_out = dots;
+  return written;
 }
 
 static void clear_pixels(void) {
-  memset(hub75_pixels(), 0, (size_t)width * (size_t)height * sizeof(uint16_t));
+  size_t bytes = (size_t)width * (size_t)height * sizeof(uint16_t);
+
+  memset(hub75_pixels(), 0, bytes);
 }
 
 static void plot(int x, int y, uint16_t color) {
   if ((unsigned)x >= (unsigned)width || (unsigned)y >= (unsigned)height) {
     return;
   }
+
   hub75_pixels()[(size_t)y * (size_t)width + (size_t)x] = color;
 }
 
-static uint16_t mix565(uint16_t a, uint16_t b, uint64_t num, uint64_t den) {
-  int ar = (a >> 11) & 31;
-  int ag = (a >> 5) & 63;
-  int ab = a & 31;
-  int br = (b >> 11) & 31;
-  int bg = (b >> 5) & 63;
-  int bb = b & 31;
-  int r = ar + (int)((int64_t)(br - ar) * (int64_t)num / (int64_t)den);
-  int g = ag + (int)((int64_t)(bg - ag) * (int64_t)num / (int64_t)den);
-  int bl = ab + (int)((int64_t)(bb - ab) * (int64_t)num / (int64_t)den);
-  return (uint16_t)((r << 11) | (g << 5) | bl);
+static uint16_t mix_color(uint16_t from, uint16_t to, uint64_t num,
+                          uint64_t den) {
+  int from_r = (from >> 11) & 31;
+  int from_g = (from >> 5) & 63;
+  int from_b = from & 31;
+  int to_r = (to >> 11) & 31;
+  int to_g = (to >> 5) & 63;
+  int to_b = to & 31;
+  int red =
+      from_r + (int)((int64_t)(to_r - from_r) * (int64_t)num / (int64_t)den);
+  int green =
+      from_g + (int)((int64_t)(to_g - from_g) * (int64_t)num / (int64_t)den);
+  int blue =
+      from_b + (int)((int64_t)(to_b - from_b) * (int64_t)num / (int64_t)den);
+
+  return (uint16_t)((red << 11) | (green << 5) | blue);
+}
+
+static void smoothstep(int step, uint64_t *numerator, uint64_t *denominator) {
+  uint64_t t = (uint64_t)step;
+  uint64_t total = (uint64_t)morph_frames;
+
+  *numerator = t * t * (3 * total - 2 * t);
+  *denominator = total * total * total;
+
+  if (*denominator == 0) {
+    *denominator = 1;
+  }
+}
+
+static void plot_traveler(Dot from, Dot to, uint64_t num, uint64_t den) {
+  int64_t moved_x = (int64_t)(to.x - from.x) * (int64_t)num / (int64_t)den;
+  int64_t moved_y = (int64_t)(to.y - from.y) * (int64_t)num / (int64_t)den;
+  int x = from.x + (int)moved_x;
+  int y = from.y + (int)moved_y;
+  uint16_t color = mix_color(from.color, to.color, num, den);
+
+  plot(x, y, color);
+}
+
+static void plot_fade_out(Dot dot, uint64_t num, uint64_t den) {
+  uint16_t color = mix_color(dot.color, 0, num, den);
+
+  if (color == 0) {
+    return;
+  }
+
+  plot(dot.x, dot.y, color);
+}
+
+static void plot_fade_in(Dot dot, uint64_t num, uint64_t den) {
+  uint16_t color = mix_color(0, dot.color, num, den);
+
+  if (color == 0) {
+    return;
+  }
+
+  plot(dot.x, dot.y, color);
 }
 
 static void paint_morph(int step) {
-  uint64_t t = (uint64_t)step;
-  uint64_t total = (uint64_t)morph_frames;
-  uint64_t num = t * t * (3 * total - 2 * t);
-  uint64_t den = total * total * total;
-  int pairs;
+  uint64_t num;
+  uint64_t den;
+  int shared;
   int i;
 
-  if (den == 0) {
-    den = 1;
-  }
-  pairs = src_n > dst_n ? src_n : dst_n;
-  if (pairs < 1 || src_n < 1 || dst_n < 1) {
-    return;
-  }
+  smoothstep(step, &num, &den);
   clear_pixels();
-  for (i = 0; i < pairs; i++) {
-    int si = (pairs == 1) ? 0 : i * (src_n - 1) / (pairs - 1);
-    int di = (pairs == 1) ? 0 : i * (dst_n - 1) / (pairs - 1);
-    Dot s = src_dots[si];
-    Dot d = dst_dots[di];
-    int x = s.x + (int)((int64_t)(d.x - s.x) * (int64_t)num / (int64_t)den);
-    int y = s.y + (int)((int64_t)(d.y - s.y) * (int64_t)num / (int64_t)den);
-    plot(x, y, mix565(s.color, d.color, num, den));
+
+  if (src_count < dst_count) {
+    shared = src_count;
+  } else {
+    shared = dst_count;
   }
+
+  for (i = shared; i < src_count; i++) {
+    plot_fade_out(src_dots[i], num, den);
+  }
+
+  for (i = shared; i < dst_count; i++) {
+    plot_fade_in(dst_dots[i], num, den);
+  }
+
+  for (i = 0; i < shared; i++) {
+    plot_traveler(src_dots[i], dst_dots[i], num, den);
+  }
+}
+
+static void copy_pixels(uint16_t *dest) {
+  size_t bytes = (size_t)width * (size_t)height * sizeof(uint16_t);
+
+  memcpy(dest, hub75_pixels(), bytes);
 }
 
 static void begin_morph(void) {
   size_t bytes = (size_t)width * (size_t)height * sizeof(uint16_t);
 
-  morph_next = (show_index + 1) % kShowCount;
-  memcpy(src_img, hub75_pixels(), bytes);
+  next_show = (show_index + 1) % show_count;
+  copy_pixels(src_image);
+
   frameCount = 1;
-  kShows[morph_next].setup();
-  kShows[morph_next].draw();
-  memcpy(dst_img, hub75_pixels(), bytes);
-  src_n = collect(src_img, &src_dots);
-  dst_n = collect(dst_img, &dst_dots);
-  memcpy(hub75_pixels(), src_img, bytes);
-  showing = 0;
-  tick = 0;
-  fprintf(stderr, "playlist: %s -> %s\n", kShows[show_index].name,
-          kShows[morph_next].name);
+  shows[next_show].setup();
+  shows[next_show].draw();
+  copy_pixels(dst_image);
+
+  src_count = collect_lit_dots(src_image, &src_dots);
+  dst_count = collect_lit_dots(dst_image, &dst_dots);
+
+  memcpy(hub75_pixels(), src_image, bytes);
+  morphing = 1;
+  morph_tick = 0;
+  fprintf(stderr, "playlist: %s -> %s\n", shows[show_index].name,
+          shows[next_show].name);
 }
 
 void setup(void) {
   size_t count = (size_t)width * (size_t)height;
 
-  hold_frames = env_frames("PLAYLIST_HOLD_FRAMES", HOLD_FRAMES);
-  morph_frames = env_frames("PLAYLIST_MORPH_FRAMES", MORPH_FRAMES);
-  src_img = (uint16_t *)calloc(count, sizeof(uint16_t));
-  dst_img = (uint16_t *)calloc(count, sizeof(uint16_t));
-  if (!src_img || !dst_img) {
+  hold_frames = frames_from_env("PLAYLIST_HOLD_FRAMES", HOLD_FRAMES);
+  morph_frames = frames_from_env("PLAYLIST_MORPH_FRAMES", MORPH_FRAMES);
+  src_image = (uint16_t *)calloc(count, sizeof(uint16_t));
+  dst_image = (uint16_t *)calloc(count, sizeof(uint16_t));
+
+  if (!src_image || !dst_image) {
     fprintf(stderr, "playlist: out of memory\n");
     return;
   }
+
   show_index = 0;
-  showing = 1;
-  tick = 0;
+  morphing = 0;
+  hold_tick = 0;
+  morph_tick = 0;
   frameCount = 0;
-  kShows[0].setup();
-  fprintf(stderr, "playlist: %s for %d frames, morph %d frames\n",
-          kShows[0].name, hold_frames, morph_frames);
+  shows[0].setup();
+  fprintf(stderr, "playlist: %s, hold %d frames, morph %d frames\n",
+          shows[0].name, hold_frames, morph_frames);
 }
 
 void draw(void) {
-  if (!src_img || !dst_img) {
-    return;
-  }
-  if (!showing) {
-    tick++;
-    paint_morph(tick);
-    if (tick >= morph_frames) {
-      show_index = morph_next;
-      showing = 1;
-      tick = 1;
-      frameCount = 1;
-      fprintf(stderr, "playlist: %s\n", kShows[show_index].name);
-    }
+  if (!src_image || !dst_image) {
     return;
   }
 
-  tick++;
-  frameCount = (unsigned long)tick;
-  kShows[show_index].draw();
-  if (tick >= hold_frames) {
+  if (morphing) {
+    morph_tick++;
+    paint_morph(morph_tick);
+
+    if (morph_tick >= morph_frames) {
+      show_index = next_show;
+      morphing = 0;
+      /* The last morph frame is the incoming sketch's first frame. */
+      hold_tick = 1;
+      frameCount = 1;
+      fprintf(stderr, "playlist: %s\n", shows[show_index].name);
+    }
+
+    return;
+  }
+
+  hold_tick++;
+  frameCount = (unsigned long)hold_tick;
+  shows[show_index].draw();
+
+  if (hold_tick >= hold_frames) {
     begin_morph();
   }
 }

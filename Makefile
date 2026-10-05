@@ -26,7 +26,7 @@ ARDUINO_CLI_CANDIDATE := /Applications/Arduino IDE.app/Contents/Resources/app/li
 endif
 ARDUINO_CLI ?= $(ARDUINO_CLI_CANDIDATE)
 
-PLAYLIST_SHOWS = drift lattice steps cube2 twister raster gray squares hex pulse bounce gameboy gradient
+PLAYLIST_SHOWS = drift lattice steps cube triangle
 
 ifeq ($(SKETCH),playlist)
 PLAY_OBJS = $(foreach s,$(PLAYLIST_SHOWS),$(BUILD)/play-$(s).o)
