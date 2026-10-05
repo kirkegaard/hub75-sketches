@@ -1,3 +1,4 @@
+#include "SDL_render.h"
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 
@@ -36,6 +37,7 @@ static int handle_event(const SDL_Event *event) {
   if (event->type == SDL_QUIT) {
     return 1;
   }
+
   if (event->type == SDL_KEYDOWN && !event->key.repeat) {
     if (event->key.keysym.sym == SDLK_UP) {
       g_up = 1;
@@ -52,6 +54,7 @@ static int handle_event(const SDL_Event *event) {
       g_down = 0;
     }
   }
+
   return 0;
 }
 
@@ -93,28 +96,35 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
   }
   max_w = bounds.w * 92 / 100;
   max_h = bounds.h * 92 / 100;
+
   if (max_w < 1) {
     max_w = 1;
   }
   if (max_h < 1) {
     max_h = 1;
   }
+
   /* Whole pixels per LED. A fractional scale drops a different column
      from each disk, so neighboring circles look cut off. */
   cell = panel->pitch_px;
   fit = max_w / panel->matrix_w;
+
   if (max_h / panel->matrix_h < fit) {
     fit = max_h / panel->matrix_h;
   }
+
   if (fit < 1) {
     fit = 1;
   }
+
   if (fit < cell) {
     cell = fit;
   }
+
   view_w = panel->matrix_w * cell;
   view_h = panel->matrix_h * cell;
   diameter = hub75_led_diameter(cell);
+
   if (cell == panel->pitch_px && diameter == panel->led_px) {
     view = panel->rgb;
   } else {
@@ -134,37 +144,53 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
                             SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
   if (!window) {
     fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
+
     if (own_view) {
       free(view);
     }
+
     SDL_Quit();
+
     return;
   }
-  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+  renderer = SDL_CreateRenderer(
+      window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (!renderer) {
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
   }
+
   if (!renderer) {
     fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
+
     SDL_DestroyWindow(window);
+
     if (own_view) {
       free(view);
     }
+
     SDL_Quit();
+
     return;
   }
+
   texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
                               SDL_TEXTUREACCESS_STREAMING, view_w, view_h);
   if (!texture) {
     fprintf(stderr, "SDL_CreateTexture: %s\n", SDL_GetError());
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+
     if (own_view) {
       free(view);
     }
+
     SDL_Quit();
+
     return;
   }
+
   if (SDL_SetTextureScaleMode(texture, SDL_ScaleModeNearest) != 0) {
     fprintf(stderr, "SDL_SetTextureScaleMode: %s\n", SDL_GetError());
   }
@@ -182,10 +208,13 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
         running = 0;
       }
     }
+
     if (!running) {
       break;
     }
+
     now = SDL_GetTicks();
+
     if ((Sint32)(now - next) >= 0) {
       step_frame(view, cell, diameter, panel->matrix_w, panel->matrix_h);
       present(renderer, texture, view, view_w);
@@ -200,9 +229,11 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
 
   g_up = 0;
   g_down = 0;
+
   if (own_view) {
     free(view);
   }
+
   SDL_DestroyTexture(texture);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
