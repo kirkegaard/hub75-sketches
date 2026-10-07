@@ -62,6 +62,8 @@ static Dot *src_dots = NULL;
 static Dot *dst_dots = NULL;
 static int src_count = 0;
 static int dst_count = 0;
+static int *src_join = NULL;
+static int *dst_join = NULL;
 
 static int frames_from_env(const char *name, int fallback) {
   const char *text = getenv(name);
@@ -177,34 +179,123 @@ static void smoothstep(int step, uint64_t *numerator, uint64_t *denominator) {
   }
 }
 
+static void plot_along(int from_x, int from_y, int to_x, int to_y, uint16_t ink,
+                       uint64_t num, uint64_t den) {
+  int64_t moved_x = (int64_t)(to_x - from_x) * (int64_t)num / (int64_t)den;
+  int64_t moved_y = (int64_t)(to_y - from_y) * (int64_t)num / (int64_t)den;
+
+  plot(from_x + (int)moved_x, from_y + (int)moved_y, ink);
+}
+
 static void plot_traveler(Dot from, Dot to, uint64_t num, uint64_t den) {
-  int64_t moved_x = (int64_t)(to.x - from.x) * (int64_t)num / (int64_t)den;
-  int64_t moved_y = (int64_t)(to.y - from.y) * (int64_t)num / (int64_t)den;
-  int x = from.x + (int)moved_x;
-  int y = from.y + (int)moved_y;
   uint16_t color = mix_color(from.color, to.color, num, den);
 
-  plot(x, y, color);
+  plot_along(from.x, from.y, to.x, to.y, color, num, den);
 }
 
-static void plot_fade_out(Dot dot, uint64_t num, uint64_t den) {
-  uint16_t color = mix_color(dot.color, 0, num, den);
+static int nearest_filled(int x, int y, const Dot *dots, int count) {
+  int best = 0;
+  int best_dist = -1;
+  int i;
 
-  if (color == 0) {
+  for (i = 0; i < count; i++) {
+    int dx = (int)dots[i].x - x;
+    int dy = (int)dots[i].y - y;
+    int dist = dx * dx + dy * dy;
+
+    if (best_dist < 0 || dist < best_dist) {
+      best = i;
+      best_dist = dist;
+    }
+  }
+
+  return best;
+}
+
+static int paired_count(void) {
+  if (src_count < dst_count) {
+    return src_count;
+  }
+  return dst_count;
+}
+
+/* Extra dots have no partner of their own. Each one joins the nearest
+   dot that does, so it moves to a LED that is already filled. */
+static void match_extras(void) {
+  int shared = paired_count();
+  int i;
+  int *src_next = NULL;
+  int *dst_next = NULL;
+
+  if (src_count > 0) {
+    src_next = (int *)malloc((size_t)src_count * sizeof(int));
+  }
+  if (dst_count > 0) {
+    dst_next = (int *)malloc((size_t)dst_count * sizeof(int));
+  }
+
+  if ((src_count > 0 && !src_next) || (dst_count > 0 && !dst_next)) {
+    free(src_next);
+    free(dst_next);
+    free(src_join);
+    free(dst_join);
+    src_join = NULL;
+    dst_join = NULL;
     return;
   }
 
-  plot(dot.x, dot.y, color);
+  free(src_join);
+  free(dst_join);
+  src_join = src_next;
+  dst_join = dst_next;
+
+  for (i = shared; i < src_count; i++) {
+    if (shared < 1) {
+      src_join[i] = -1;
+      continue;
+    }
+    src_join[i] = nearest_filled(src_dots[i].x, src_dots[i].y, dst_dots, shared);
+  }
+
+  for (i = shared; i < dst_count; i++) {
+    if (shared < 1) {
+      dst_join[i] = -1;
+      continue;
+    }
+    dst_join[i] = nearest_filled(dst_dots[i].x, dst_dots[i].y, src_dots, shared);
+  }
 }
 
-static void plot_fade_in(Dot dot, uint64_t num, uint64_t den) {
-  uint16_t color = mix_color(0, dot.color, num, den);
+static void plot_leave(int index, uint64_t num, uint64_t den) {
+  Dot dot;
+  Dot dest;
+  int join;
 
-  if (color == 0) {
+  if (!src_join || src_join[index] < 0) {
     return;
   }
 
-  plot(dot.x, dot.y, color);
+  dot = src_dots[index];
+  join = src_join[index];
+  dest = dst_dots[join];
+  plot_along(dot.x, dot.y, dest.x, dest.y, dot.color, num, den);
+}
+
+static void plot_arrive(int index, uint64_t num, uint64_t den) {
+  Dot dot;
+  Dot origin;
+  int join;
+
+  dot = dst_dots[index];
+
+  if (!dst_join || dst_join[index] < 0) {
+    plot(dot.x, dot.y, dot.color);
+    return;
+  }
+
+  join = dst_join[index];
+  origin = src_dots[join];
+  plot_along(origin.x, origin.y, dot.x, dot.y, dot.color, num, den);
 }
 
 static void paint_morph(int step) {
@@ -215,19 +306,14 @@ static void paint_morph(int step) {
 
   smoothstep(step, &num, &den);
   clear_pixels();
-
-  if (src_count < dst_count) {
-    shared = src_count;
-  } else {
-    shared = dst_count;
-  }
+  shared = paired_count();
 
   for (i = shared; i < src_count; i++) {
-    plot_fade_out(src_dots[i], num, den);
+    plot_leave(i, num, den);
   }
 
   for (i = shared; i < dst_count; i++) {
-    plot_fade_in(dst_dots[i], num, den);
+    plot_arrive(i, num, den);
   }
 
   for (i = 0; i < shared; i++) {
@@ -254,6 +340,7 @@ static void begin_morph(void) {
 
   src_count = collect_lit_dots(src_image, &src_dots);
   dst_count = collect_lit_dots(dst_image, &dst_dots);
+  match_extras();
 
   memcpy(hub75_pixels(), src_image, bytes);
   morphing = 1;

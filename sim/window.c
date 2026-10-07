@@ -33,7 +33,20 @@ static void present(SDL_Renderer *renderer, SDL_Texture *texture, uint8_t *rgb,
   SDL_RenderPresent(renderer);
 }
 
-static int handle_event(const SDL_Event *event) {
+static void toggle_fullscreen(SDL_Window *window) {
+  Uint32 flags = SDL_GetWindowFlags(window);
+  Uint32 mode = SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+  if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+    mode = 0;
+  }
+
+  if (SDL_SetWindowFullscreen(window, mode) != 0) {
+    fprintf(stderr, "SDL_SetWindowFullscreen: %s\n", SDL_GetError());
+  }
+}
+
+static int handle_event(SDL_Window *window, const SDL_Event *event) {
   if (event->type == SDL_QUIT) {
     return 1;
   }
@@ -43,6 +56,8 @@ static int handle_event(const SDL_Event *event) {
       g_up = 1;
     } else if (event->key.keysym.sym == SDLK_DOWN) {
       g_down = 1;
+    } else if (event->key.keysym.sym == SDLK_f) {
+      toggle_fullscreen(window);
     } else if (event->key.keysym.sym == SDLK_ESCAPE ||
                event->key.keysym.sym == SDLK_q) {
       return 1;
@@ -174,6 +189,10 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
     return;
   }
 
+  if (SDL_RenderSetLogicalSize(renderer, view_w, view_h) != 0) {
+    fprintf(stderr, "SDL_RenderSetLogicalSize: %s\n", SDL_GetError());
+  }
+
   texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
                               SDL_TEXTUREACCESS_STREAMING, view_w, view_h);
   if (!texture) {
@@ -204,7 +223,7 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
     Uint32 now;
 
     while (SDL_PollEvent(&event)) {
-      if (handle_event(&event)) {
+      if (handle_event(window, &event)) {
         running = 0;
       }
     }

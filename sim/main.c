@@ -130,8 +130,7 @@ int main(int argc, char **argv) {
     char title[128];
     snprintf(title, sizeof title, "%s  %dx%d  %s", HUB75_SKETCH_NAME, width_arg,
              height_arg, panel.pitch_name);
-    fprintf(stderr, "%s  --  arrows are the board buttons, q or esc closes\n",
-            title);
+    fprintf(stderr, "%s  --  arrows are the board buttons, f toggles fullscreen, q or esc closes\n", title);
     sim_window_run(title, &panel);
   }
   hub75_panel_free(&panel);

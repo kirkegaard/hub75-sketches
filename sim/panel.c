@@ -125,9 +125,9 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, const uint16_t *fb,
   const uint8_t gap_r = 6;
   const uint8_t gap_g = 6;
   const uint8_t gap_b = 8;
-  const uint8_t off_r = 28;
-  const uint8_t off_g = 28;
-  const uint8_t off_b = 30;
+  const uint8_t off_r = HUB75_LED_OFF_R;
+  const uint8_t off_g = HUB75_LED_OFF_G;
+  const uint8_t off_b = HUB75_LED_OFF_B;
 
   if (!rgb || !fb || cell < 1 || matrix_w < 1 || matrix_h < 1) {
     return;

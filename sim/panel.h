@@ -5,8 +5,12 @@
 
 /* Screen scale is 8 pixels per millimeter, so a P4 panel is four times
    a P1 panel of the same LED count. The LED disk is about 70% of the
-   pitch; the rest of the cell is the gap. */
+   pitch; the rest of the cell is the gap. An unlit LED is this dark
+   disk, not pure black. */
 #define HUB75_PX_PER_MM 8
+#define HUB75_LED_OFF_R 28
+#define HUB75_LED_OFF_G 28
+#define HUB75_LED_OFF_B 30
 
 typedef struct Hub75Panel {
   int matrix_w;

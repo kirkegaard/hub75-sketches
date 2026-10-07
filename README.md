@@ -21,7 +21,7 @@ On macos you might need to install command line tools.
 make sim
 ```
 
-That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `q` or esc to close the window. The up and down arrow keys are the board's two user buttons.
+That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `f` to toggle fullscreen, or `q` or esc to close the window. The up and down arrow keys are the board's two user buttons.
 
 `make sim` also accepts the sketch, the LED count, and the pitch:
 
