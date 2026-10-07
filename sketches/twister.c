@@ -243,7 +243,7 @@ void draw(void) {
                            (1.f + sinf(tsy / 200.f));
 
     float latent = 5.f * sinf(t / 10000.f + (float)s / 50.f);
-    float main = (1.f - cosf(powf(t / 5000.f, 2.f))) * 4.f *
+    float main = (1.f - cosf(t / 5000.f)) * 4.f *
                  sinf(t / 1000.f - (float)s / 15.f);
 
     float angle = latent + main;

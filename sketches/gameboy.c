@@ -11,8 +11,8 @@
    Change TITLE and LINE. A missing character is a 4px gap. */
 
 static const char TITLE_A[] = "HELLO";
-static const char TITLE_B[] = "MIKE";
-static const char LINE[] = "HELLO MIKE   ";
+static const char TITLE_B[] = "WORLD";
+static const char LINE[] = "ALL DEMOS NEEDS A SCROLLING TEXT    ";
 
 #define GB_ROWS 8
 #define GB_FIRST 32
@@ -252,11 +252,15 @@ void draw(void) {
   scroll = (int)((frameCount - 1) % (unsigned)span);
   background(bg);
 
-  // text((width - text_width(TITLE_A)) / 2, (height / 2) - 8, TITLE_A);
-  // text((width - text_width(TITLE_B)) / 2, (height / 2), TITLE_B);
+  text((width - text_width(TITLE_A)) / 2, y - 15, TITLE_A);
+  text((width - text_width(TITLE_B)) / 2, y - 8, TITLE_B);
+
+  stroke(rule);
+  strokeWeight(1);
+  line(0, y, width, y);
 
   for (x = -scroll; x < width; x += span) {
-    text(x, y, LINE);
+    text(x, y + 4, LINE);
   }
   stroke(rule);
 }

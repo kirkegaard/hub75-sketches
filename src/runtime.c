@@ -1,7 +1,7 @@
 #include "hub75.h"
 
 #include "graphics.h"
-#include "window.h"
+#include "input.h"
 
 #include <time.h>
 

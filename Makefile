@@ -10,11 +10,11 @@ PORT ?=
 CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim
 
 PKG_CONFIG ?= pkg-config
-SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl2 2>/dev/null)
-SDL_LIBS := $(filter-out -lSDL2main,$(shell $(PKG_CONFIG) --libs sdl2 2>/dev/null))
+SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl3 2>/dev/null)
+SDL_LIBS := $(shell $(PKG_CONFIG) --libs sdl3 2>/dev/null)
 ifeq ($(strip $(SDL_LIBS)),)
-SDL_CFLAGS := $(shell sdl2-config --cflags 2>/dev/null)
-SDL_LIBS := $(filter-out -lSDL2main,$(shell sdl2-config --libs 2>/dev/null))
+SDL_CFLAGS := $(shell sdl3-config --cflags 2>/dev/null)
+SDL_LIBS := $(shell sdl3-config --libs 2>/dev/null)
 endif
 
 BUILD = build
@@ -26,29 +26,24 @@ ARDUINO_CLI_CANDIDATE := /Applications/Arduino IDE.app/Contents/Resources/app/li
 endif
 ARDUINO_CLI ?= $(ARDUINO_CLI_CANDIDATE)
 
-PLAYLIST_SHOWS = drift lattice steps cube triangle
+# Every sketch in sketches/ is linked into the simulator so the browser
+# can switch between them at runtime. The name is sorted and any dash
+# becomes an underscore for the renamed setup/draw symbols.
+SKETCHES := $(sort $(notdir $(basename $(wildcard sketches/*.c))))
+SKETCH_OBJS = $(foreach s,$(SKETCHES),$(BUILD)/sk-$(s).o)
 
-ifeq ($(SKETCH),playlist)
-PLAY_OBJS = $(foreach s,$(PLAYLIST_SHOWS),$(BUILD)/play-$(s).o)
 OBJS = \
 	$(BUILD)/graphics.o \
 	$(BUILD)/runtime.o \
 	$(BUILD)/panel.o \
 	$(BUILD)/ppm.o \
+	$(BUILD)/input.o \
 	$(BUILD)/main-$(SKETCH).o \
 	$(BUILD)/window.o \
-	$(BUILD)/playlist.o \
-	$(PLAY_OBJS)
-else
-OBJS = \
-	$(BUILD)/graphics.o \
-	$(BUILD)/runtime.o \
-	$(BUILD)/panel.o \
-	$(BUILD)/ppm.o \
-	$(BUILD)/main-$(SKETCH).o \
-	$(BUILD)/window.o \
-	$(BUILD)/$(SKETCH).o
-endif
+	$(BUILD)/browser.o \
+	$(BUILD)/font5x7.o \
+	$(BUILD)/sketch_registry.o \
+	$(SKETCH_OBJS)
 
 .PHONY: sim firmware flash check-sketch check-sdl clean
 
@@ -60,31 +55,20 @@ $(TARGET): $(OBJS)
 
 check-sdl:
 	@test -n "$(strip $(SDL_LIBS))" || { \
-		echo "error: SDL2 not found."; \
-		echo "The simulator window uses SDL2, so the same build runs on macOS and Linux."; \
-		echo "  brew install sdl2"; \
-		echo "  sudo apt install libsdl2-dev"; \
+		echo "error: SDL3 not found."; \
+		echo "The simulator window uses SDL3 and its GPU layer."; \
+		echo "  brew install sdl3"; \
+		echo "  sudo apt install libsdl3-dev"; \
 		exit 1; \
 	}
 
 check-sketch:
-ifeq ($(SKETCH),playlist)
-	@missing=0; \
-	for s in $(PLAYLIST_SHOWS); do \
-		if [ ! -f "sketches/$$s.c" ]; then \
-			echo "error: sketches/$$s.c does not exist"; \
-			missing=1; \
-		fi; \
-	done; \
-	test "$$missing" -eq 0
-else
 	@test -f sketches/$(SKETCH).c || { \
 		echo "error: sketches/$(SKETCH).c does not exist"; \
 		echo "sketches:"; \
 		ls sketches/*.c; \
 		exit 1; \
 	}
-endif
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -92,38 +76,58 @@ $(BUILD):
 $(BUILD)/graphics.o: src/graphics.c include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/graphics.c -o $@
 
-$(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h sim/window.h | $(BUILD)
-	$(CC) $(CFLAGS) -c src/runtime.c -o $@
+$(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h sim/input.h | $(BUILD)
+	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c src/runtime.c -o $@
 
 $(BUILD)/panel.o: sim/panel.c sim/panel.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/panel.c -o $@
 
+$(BUILD)/input.o: sim/input.c sim/input.h sim/panel.h sim/browser.h include/hub75.h | $(BUILD)
+	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/input.c -o $@
+
 $(BUILD)/ppm.o: sim/ppm.c sim/ppm.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/ppm.c -o $@
 
-$(BUILD)/main-$(SKETCH).o: sim/main.c include/hub75.h src/graphics.h src/runtime.h sim/panel.h sim/ppm.h sim/window.h | $(BUILD)
+$(BUILD)/main-$(SKETCH).o: sim/main.c include/hub75.h src/graphics.h src/runtime.h sim/panel.h sim/ppm.h sim/window.h sim/browser.h | $(BUILD)
 	$(CC) $(CFLAGS) -DHUB75_SKETCH_NAME=\"$(SKETCH)\" -c sim/main.c -o $@
 
-$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h include/hub75.h src/graphics.h | $(BUILD)
+$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h sim/browser.h sim/font5x7.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/window.c -o $@
 
-ifneq ($(SKETCH),playlist)
-$(BUILD)/$(SKETCH).o: sketches/$(SKETCH).c include/hub75.h | $(BUILD)
-	$(CC) $(CFLAGS) -c sketches/$(SKETCH).c -o $@
-endif
+$(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h sim/font5x7.h | $(BUILD)
+	$(CC) $(CFLAGS) -c sim/browser.c -o $@
 
-$(BUILD)/playlist.o: sim/playlist.c include/hub75.h src/graphics.h | $(BUILD)
-	$(CC) $(CFLAGS) -c sim/playlist.c -o $@
+$(BUILD)/font5x7.o: sim/font5x7.c sim/font5x7.h | $(BUILD)
+	$(CC) $(CFLAGS) -c sim/font5x7.c -o $@
 
-$(BUILD)/play-%.o: sketches/%.c include/hub75.h | $(BUILD)
-	$(CC) $(CFLAGS) -Dsetup=$*_setup -Ddraw=$*_draw -c $< -o $@
+# The registry lists every sketch in sketches/ so the browser can show
+# them. It depends on the folder itself, not just the files, so a rename
+# (which keeps the file's mtime) still regenerates it.
+$(BUILD)/sketch_registry.c: sketches/ $(wildcard sketches/*.c) sim/browser.h Makefile | $(BUILD)
+	@{ \
+		echo '#include "browser.h"'; \
+		for s in $(SKETCHES); do \
+			sym=`echo "$$s" | tr '-' '_'`; \
+			echo "void $${sym}_setup(void);"; \
+			echo "void $${sym}_draw(void);"; \
+		done; \
+		echo 'const Hub75Sketch hub75_sketches[] = {'; \
+		for s in $(SKETCHES); do \
+			sym=`echo "$$s" | tr '-' '_'`; \
+			echo "  {\"$$s\", $${sym}_setup, $${sym}_draw},"; \
+		done; \
+		echo '};'; \
+		echo 'const int hub75_sketch_count ='; \
+		echo '    (int)(sizeof(hub75_sketches) / sizeof(hub75_sketches[0]));'; \
+	} > $@
+
+$(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
+	$(CC) $(CFLAGS) -c $(BUILD)/sketch_registry.c -o $@
+
+$(BUILD)/sk-%.o: sketches/%.c include/hub75.h | $(BUILD)
+	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
 firmware: check-sketch
-	@if [ "$(SKETCH)" = "playlist" ]; then \
-		echo "error: the playlist links every sketch into the simulator."; \
-		echo "  make sim SKETCH=playlist"; \
-		exit 1; \
-	fi
 	@cli="$(ARDUINO_CLI)"; \
 	fqbn="$(FQBN)"; \
 	if [ ! -x "$$cli" ]; then \

@@ -37,6 +37,14 @@ int hub75_gfx_init(int w, int h) {
 
 uint16_t *hub75_pixels(void) { return fb; }
 
+void hub75_gfx_reset(void) {
+  fill_color = 0xFFFF;
+  stroke_color = 0xFFFF;
+  do_fill = 1;
+  do_stroke = 1;
+  stroke_w = 1;
+}
+
 uint16_t color(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8u) << 8) | ((g & 0xFCu) << 3) | (b >> 3));
 }

@@ -85,6 +85,7 @@ int hub75_panel_init(Hub75Panel *panel, int matrix_w, int matrix_h,
   panel->matrix_h = matrix_h;
   panel->pitch_px = found->pitch_px;
   panel->led_px = hub75_led_diameter(found->pitch_px);
+  panel->shape = HUB75_LED_CIRCLE;
   panel->img_w = matrix_w * found->pitch_px;
   panel->img_h = matrix_h * found->pitch_px;
   snprintf(panel->pitch_name, sizeof panel->pitch_name, "%s", found->name);
@@ -113,8 +114,33 @@ int hub75_led_diameter(int cell) {
   return d;
 }
 
-void hub75_leds_render(uint8_t *rgb, int cell, int diameter, const uint16_t *fb,
-                       int matrix_w, int matrix_h) {
+static const char *kShapeNames[] = {"circle", "square"};
+
+int hub75_led_shape_count(void) {
+  return (int)(sizeof kShapeNames / sizeof kShapeNames[0]);
+}
+
+const char *hub75_led_shape_name(int shape) {
+  if (shape < 0 || shape >= hub75_led_shape_count()) {
+    shape = HUB75_LED_CIRCLE;
+  }
+  return kShapeNames[shape];
+}
+
+int hub75_led_shape_next(int shape) {
+  return (shape + 1) % hub75_led_shape_count();
+}
+
+/* Is the point at (dx, dy) inside the lit shape of the given radius? */
+static int led_lit(int shape, float dx, float dy, float radius, float r2) {
+  if (shape == HUB75_LED_SQUARE) {
+    return dx <= radius && dx >= -radius && dy <= radius && dy >= -radius;
+  }
+  return dx * dx + dy * dy <= r2;
+}
+
+void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
+                       const uint16_t *fb, int matrix_w, int matrix_h) {
   int img_w;
   int img_h;
   int y;
@@ -156,7 +182,7 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, const uint16_t *fb,
       float dx = (float)lx - center;
       uint8_t *px = row + (size_t)x * 3u;
 
-      if (dx * dx + dy * dy <= r2) {
+      if (led_lit(shape, dx, dy, radius, r2)) {
         uint16_t sample = fb[(size_t)led_y * (size_t)matrix_w + (size_t)led_x];
         uint8_t r, g, b;
 
@@ -184,7 +210,7 @@ void hub75_panel_render(Hub75Panel *panel, const uint16_t *fb) {
   if (!panel || !panel->rgb) {
     return;
   }
-  hub75_leds_render(panel->rgb, panel->pitch_px, panel->led_px, fb,
+  hub75_leds_render(panel->rgb, panel->pitch_px, panel->led_px, panel->shape, fb,
                     panel->matrix_w, panel->matrix_h);
 }
 

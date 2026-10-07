@@ -7,7 +7,7 @@
    short color trail, darkest ghost first and the hot letter on top.
    Change MESSAGE to scroll something else. Unknown characters are a gap. */
 
-static const char MESSAGE[] = "HI MIKE    ";
+static const char MESSAGE[] = "BOUNCE WITH A TRAIL    ";
 
 /* 5x7 glyphs, bit 4 is the left pixel. */
 static const uint8_t DIGIT[10][7] = {

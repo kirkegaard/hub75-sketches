@@ -6,13 +6,13 @@ The simulator is the thing that runs without the board. It draws round LEDs with
 
 ## Run the simulator
 
-Needs a C compiler, `make`, and SDL2. The window uses SDL2. A headless `--dump` still needs the library, because it is linked into the simulator.
+Needs a C compiler, `make`, and SDL3. The window uses SDL3's GPU layer. A headless `--dump` still needs the library, because it is linked into the simulator.
 
 ```sh
 # MacOS
-brew install sdl2
+brew install sdl3
 # Debian
-sudo apt install build-essential libsdl2-dev
+sudo apt install build-essential libsdl3-dev
 ```
 
 On macos you might need to install command line tools.
@@ -21,7 +21,9 @@ On macos you might need to install command line tools.
 make sim
 ```
 
-That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `f` to toggle fullscreen, or `q` or esc to close the window. The up and down arrow keys are the board's two user buttons.
+That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `f` to toggle fullscreen, or `q` or esc to close the window.
+
+The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys are the board's two user buttons; when it is open they move the list instead. Press `s` to cycle the lit LED shape between a circle and a square, and `p` to pause the sketch.
 
 `make sim` also accepts the sketch, the LED count, and the pitch:
 
@@ -36,15 +38,19 @@ make sim SKETCH=lattice WIDTH=64 HEIGHT=32 PITCH=P2.5
 
 ### Pitch
 
-Pitch is the center-to-center LED spacing. The same resolution is a physically larger panel at P4 than at P1. The simulator uses 8 screen pixels per millimeter, and each LED disk is about 70% of the cell so the gap stays visible. P1 uses a 7px disk. A 5px disk in that 8px cell is a 4×4 square.
+Pitch is the center-to-center LED spacing. The same resolution is a physically larger panel at P4 than at P1. The simulator uses 8 screen pixels per millimeter, and the lit shape is about 70% of the cell so the gap stays visible. The shape (circle or square, toggled with `s`) is separate from the pitch: pitch is always the spacing. P1 uses a 7px shape. A 5px shape in that 8px cell is a 4×4 square.
 
-| Pitch | Spacing | Cell | LED disk | 128—64 image |
+| Pitch | Spacing | Cell | Lit shape | 128—64 image |
 | --- | --- | --- | --- | --- |
 | P1 | 1.0 mm | 8 px | 7 px | 1024—512 |
 | P2.5 | 2.5 mm | 20 px | 14 px | 2560—1280 |
 | P4 | 4.0 mm | 32 px | 22 px | 4096—2048 |
 
-Names are `P1`, `P2.5`, and `P4`. If the panel is wider than the screen, each LED is drawn with fewer whole pixels, so every disk stays the same circle. The PPM dump is always full size. Off LEDs are dark disks on a darker face, so the grid reads even where the sketch paints black.
+Names are `P1`, `P2.5`, and `P4`. If the panel is wider than the screen, each LED is drawn with fewer whole pixels so the window still fits. The PPM dump is always full size. Off LEDs are dark shapes on a darker face, so the grid reads even where the sketch paints black.
+
+### Rendering
+
+The window rasterizes the round (or square) LEDs on the CPU into an RGB24 image (`sim/panel.c`) and blits it with SDL3's 2D renderer at the panel's pitch, so it needs SDL3 but no shaders. The browser overlay is drawn with the same renderer. The headless `--dump` uses the same rasterizer.
 
 ### Headless frame dump
 
@@ -88,7 +94,7 @@ void draw(void) {
 make sim SKETCH=mysketch
 ```
 
-That file is what the firmware builds too. The public API is `include/hub75.h`:
+That file is what the firmware builds too. `SKETCH` only picks which sketch the simulator starts on; the browser lists all of them. The public API is `include/hub75.h`:
 
 - `setup()`, `draw()`
 - `width`, `height`, `frameCount` (1 on the first `draw`), `millis()`
@@ -151,8 +157,11 @@ Address E is GPIO 21. The learn guide's "Address E Line Jumper" is about the HUB
 - `include/hub75.h` — sketch API
 - `src/graphics.c` — RGB565 drawing
 - `src/runtime.c` — simulator clock and button reads
-- `sim/panel.c` — round-LED raster
-- `sim/window.c` — SDL2 window
+- `sim/panel.c` — CPU raster and the LED shape/pitch model
+- `sim/window.c` — SDL3 window, blit, and the frame loop
+- `sim/input.c` — keyboard and mouse events
+- `sim/browser.c` — sketch list and the setup/draw dispatch
+- `sim/font5x7.c` — pixel font for the browser overlay
 - `sketches/` — `drift`, `lattice`, `steps`
 - `firmware/` — pin map and the Protomatter wrapper
 - `frames/` — dumped panels

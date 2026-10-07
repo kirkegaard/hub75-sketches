@@ -5,5 +5,5 @@
 -Isrc
 -Isim
 -I/opt/homebrew/include
--I/opt/homebrew/include/SDL2
+-I/opt/homebrew/include/SDL3
 -D_THREAD_SAFE
