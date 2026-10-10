@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 
@@ -21,8 +22,6 @@ static Hex hexes[HEX_MAX];
 static int hex_count;
 static float hex_radius;
 
-static float fade(float t) { return t * t * (3.f - 2.f * t); }
-
 static float hash2(int x, int y) {
   unsigned int n = (unsigned int)(x * 374761393 + y * 668265263);
 
@@ -33,21 +32,14 @@ static float hash2(int x, int y) {
 static float noise2(float x, float y) {
   int x0 = (int)floorf(x);
   int y0 = (int)floorf(y);
-  float tx = fade(x - (float)x0);
-  float ty = fade(y - (float)y0);
+  float tx = smoothstep(x - (float)x0);
+  float ty = smoothstep(y - (float)y0);
   float a = hash2(x0, y0);
   float b = hash2(x0 + 1, y0);
   float c = hash2(x0, y0 + 1);
   float d = hash2(x0 + 1, y0 + 1);
 
   return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
-}
-
-static float mapf(float v, float a, float b, float c, float d) {
-  if (a == b) {
-    return c;
-  }
-  return c + (v - a) * (d - c) / (b - a);
 }
 
 void setup(void) {

@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 
@@ -74,34 +75,15 @@ static float bmax;
 
 static uint32_t seed = 1;
 
-static unsigned long my_rand(void) {
-  seed = seed * 1103515245u + 12345u;
-  return (seed / 65536u) % 32768u;
-}
-
-static float rand_float(float min, float max) {
-  return min + (max - min) * ((float)my_rand() / 32767.0f);
-}
-
-static int clamp_int(int v, int lo, int hi) {
-  if (v < lo) {
-    return lo;
-  }
-  if (v > hi) {
-    return hi;
-  }
-  return v;
-}
-
 static void spawn(Ball *b, float angle) {
-  float xr = rand_float(xr_min, xr_max);
-  float yr = rand_float(yr_min, yr_max);
-  int ci = (int)(my_rand() % 5u);
+  float xr = rng_float(&seed, xr_min, xr_max);
+  float yr = rng_float(&seed, yr_min, yr_max);
+  int ci = (int)(rng_next(&seed) % 5u);
 
   b->x = half_x + sinf(angle) * xr;
   b->y = half_y + cosf(angle) * yr;
   b->a = 0.f;
-  b->r = rand_float(bmin, bmax);
+  b->r = rng_float(&seed, bmin, bmax);
   b->cr = palette[ci][0];
   b->cg = palette[ci][1];
   b->cb = palette[ci][2];
@@ -112,7 +94,7 @@ void setup(void) {
   int i;
 
   seed = 1;
-  palette = kPalettes[my_rand() % 7u];
+  palette = kPalettes[rng_next(&seed) % 7u];
 
   half_x = (float)width * 0.5f;
   half_y = (float)height * 0.5f;
@@ -168,7 +150,7 @@ void draw(void) {
     }
 
     if (b->r < 0.1f) {
-      spawn(b, rand_float(0.f, 6.2831853f));
+      spawn(b, rng_float(&seed, 0.f, 6.2831853f));
     }
     b->a += 0.01f;
     b->r -= 0.05f;

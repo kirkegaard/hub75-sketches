@@ -1,9 +1,12 @@
 #include "hub75.h"
-#include "util.h"
 
-/* One rule: the panel is tiled with tiny 3x5 glyphs that keep flipping
-   to new characters. Each cell changes on its own clock, so the wall
-   shimmers instead of blinking in step.
+#include <math.h>
+
+/* One rule: every cell picks a character from a short pattern by its
+   reading index, warped by a slow sine. Ported from the textmode sketch
+   by ertdfgcvb ("Time: milliseconds"): the index is x + y plus a
+   sinusoidal offset, so the pattern flows across the panel in wavy
+   diagonals.
 
    The glyph bitmaps are the CC0 "3x5 Microfont" by Ella Jameson
    (github.com/nimaid/microfont). One u16 per ASCII code, bit 14 is the
@@ -12,6 +15,11 @@
 static uint16_t bg;
 
 enum { CELL_W = 4, CELL_H = 6, PAD = 2 };
+
+/* The original pattern uses U+2550 for the long line; '=' stands in. */
+static const char pattern[] = "ABCxyz01=|+:. ";
+
+enum { PATTERN_LEN = (int)(sizeof(pattern) - 1) };
 
 static const uint16_t font[128] = {
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -32,23 +40,17 @@ static const uint16_t font[128] = {
     0x0a95, 0x0aca, 0x0e67, 0x3513, 0x2492, 0x6456, 0x00f0, 0x0000,
 };
 
-static const char glyphs[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789"
-    ".,:;!?-+*/#%&@";
-
-enum { GLYPH_COUNT = (int)(sizeof(glyphs) - 1) };
-
-void setup(void) {
-  bg = color(0, 0, 0);
-}
+void setup(void) { bg = color(0, 0, 0); }
 
 void draw(void) {
   int cols = (width - 2 * PAD) / CELL_W;
   int rows = (height - 2 * PAD) / CELL_H;
   int origin_x;
   int origin_y;
+  /* context.time is milliseconds; the window and firmware both step one
+     frame every 33 ms, so frameCount * 33 stands in. */
+  float t = (float)frameCount * 33.0f * 0.0001f;
+  float st = sinf(t);
   int col;
   int row;
 
@@ -62,29 +64,23 @@ void draw(void) {
   origin_y = PAD + (height - 2 * PAD - (rows * CELL_H - 1)) / 2;
 
   background(bg);
+  stroke(color(255, 255, 255));
 
   for (row = 0; row < rows; row++) {
     for (col = 0; col < cols; col++) {
-      uint32_t seed = hash_mix(hash_combine2(col, row));
-      uint32_t period = 8u + seed % 40u;
-      uint32_t epoch = (uint32_t)frameCount / period;
-      uint32_t draw_seed = hash_mix(seed ^ epoch * 2654435761u);
-      int level;
+      float o = sinf((float)row * st * 0.2f + (float)col * 0.04f + t) * 20.0f;
+      int i = (int)lroundf(fabsf((float)(col + row) + o)) % PATTERN_LEN;
+      char ch = pattern[i];
+      uint16_t bits;
       int gx;
       int gy;
-      uint16_t bits;
       int r;
       int c;
 
-      /* A few cells go blank for a beat, which reads as static. */
-      if (draw_seed % 8u == 0u) {
+      if (ch == ' ') {
         continue;
       }
-
-      bits = font[(unsigned char)glyphs[draw_seed % (uint32_t)GLYPH_COUNT]];
-      level = 120 + (int)((draw_seed >> 8) % 136u);
-
-      stroke(color((uint8_t)level, (uint8_t)level, (uint8_t)level));
+      bits = font[(unsigned char)ch];
       gx = origin_x + col * CELL_W;
       gy = origin_y + row * CELL_H;
       for (r = 0; r < 5; r++) {

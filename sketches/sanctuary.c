@@ -1,9 +1,13 @@
 #include "hub75.h"
 #include "util.h"
 
-/* One rule: the panel is tiled with tiny 3x5 glyphs that keep flipping
-   to new characters. Each cell changes on its own clock, so the wall
-   shimmers instead of blinking in step.
+#include <math.h>
+
+/* One rule: the panel is packed with tiny glyphs, and a left-right
+   symmetric field colours them into a slow, monumental composition.
+   The whole text field scrolls vertically, so the characters travel
+   along with the colours instead of flickering in place. After the
+   "ASCII sanctuary" experiments by Andreas Gysin.
 
    The glyph bitmaps are the CC0 "3x5 Microfont" by Ella Jameson
    (github.com/nimaid/microfont). One u16 per ASCII code, bit 14 is the
@@ -12,6 +16,12 @@
 static uint16_t bg;
 
 enum { CELL_W = 4, CELL_H = 6, PAD = 2 };
+
+/* Dim slate background up through white, orange, red to magenta. */
+static const uint8_t palette[6][3] = {
+    {38, 44, 68},  {78, 90, 132},  {222, 228, 236},
+    {255, 150, 40}, {226, 46, 46}, {226, 62, 160},
+};
 
 static const uint16_t font[128] = {
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -40,15 +50,16 @@ static const char glyphs[] =
 
 enum { GLYPH_COUNT = (int)(sizeof(glyphs) - 1) };
 
-void setup(void) {
-  bg = color(0, 0, 0);
-}
+void setup(void) { bg = color(0, 0, 0); }
 
 void draw(void) {
   int cols = (width - 2 * PAD) / CELL_W;
   int rows = (height - 2 * PAD) / CELL_H;
   int origin_x;
   int origin_y;
+  float cxc;
+  float t = (float)frameCount;
+  float scroll = t * 0.06f;
   int col;
   int row;
 
@@ -58,6 +69,7 @@ void draw(void) {
   if (rows < 1) {
     rows = 1;
   }
+  cxc = (float)(cols - 1) * 0.5f;
   origin_x = PAD + (width - 2 * PAD - (cols * CELL_W - 1)) / 2;
   origin_y = PAD + (height - 2 * PAD - (rows * CELL_H - 1)) / 2;
 
@@ -65,28 +77,29 @@ void draw(void) {
 
   for (row = 0; row < rows; row++) {
     for (col = 0; col < cols; col++) {
-      uint32_t seed = hash_mix(hash_combine2(col, row));
-      uint32_t period = 8u + seed % 40u;
-      uint32_t epoch = (uint32_t)frameCount / period;
-      uint32_t draw_seed = hash_mix(seed ^ epoch * 2654435761u);
+      /* u is mirrored about the centre, so the field stays left-right
+         symmetric. The text rides a warped vertical coordinate: a sine
+         wave across the width offsets each column, so the glyphs and
+         the colours flow together instead of scrolling flat. */
+      float u = cxc > 0.0f ? fabsf((float)col - cxc) / cxc : 0.0f;
+      float oy = sinf(u * 9.42f + t * 0.08f) * 2.5f;
+      float fy = (float)row + scroll + oy;
+      float v = fy * 0.35f;
+      float f1 = sinf(6.5f * u) * cosf(v);
+      float f2 = sinf(4.0f * u + 0.8f * v);
+      float val = 0.5f + 0.34f * f1 + 0.16f * f2;
       int level;
-      int gx;
-      int gy;
-      uint16_t bits;
+      int trow = (int)floorf(fy);
+      uint32_t seed = hash_mix(hash_combine2(col, trow));
+      uint16_t bits = font[(unsigned char)glyphs[seed % (uint32_t)GLYPH_COUNT]];
+      int gx = origin_x + col * CELL_W;
+      int gy = origin_y + row * CELL_H;
       int r;
       int c;
 
-      /* A few cells go blank for a beat, which reads as static. */
-      if (draw_seed % 8u == 0u) {
-        continue;
-      }
+      level = (int)(clamp01(val) * 5.999f);
 
-      bits = font[(unsigned char)glyphs[draw_seed % (uint32_t)GLYPH_COUNT]];
-      level = 120 + (int)((draw_seed >> 8) % 136u);
-
-      stroke(color((uint8_t)level, (uint8_t)level, (uint8_t)level));
-      gx = origin_x + col * CELL_W;
-      gy = origin_y + row * CELL_H;
+      stroke(color(palette[level][0], palette[level][1], palette[level][2]));
       for (r = 0; r < 5; r++) {
         for (c = 0; c < 3; c++) {
           if (bits & (1u << (14 - (r * 3 + c)))) {

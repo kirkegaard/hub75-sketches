@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 /* Two particle streams. The border drifts one way and an inset box
    drifts the other, so the frame reads as a seam where the motion
@@ -27,37 +28,18 @@ static int tri_h;
 
 static uint32_t seed = 1;
 
-static unsigned long my_rand(void) {
-  seed = seed * 1103515245u + 12345u;
-  return (seed / 65536u) % 32768u;
-}
-
-static float rand_float(float min, float max) {
-  return min + (max - min) * ((float)my_rand() / 32767.0f);
-}
-
-static int clamp_int(int v, int lo, int hi) {
-  if (v < lo) {
-    return lo;
-  }
-  if (v > hi) {
-    return hi;
-  }
-  return v;
-}
-
 static void spawn_back(Particle *p) {
-  p->x = rand_float(0.0f, (float)width);
-  p->y = rand_float(0.0f, (float)height);
-  p->v = rand_float(0.1f, 1.0f);
-  p->o = rand_float(0.25f, 0.9f);
+  p->x = rng_float(&seed, 0.0f, (float)width);
+  p->y = rng_float(&seed, 0.0f, (float)height);
+  p->v = rng_float(&seed, 0.1f, 1.0f);
+  p->o = rng_float(&seed, 0.25f, 0.9f);
 }
 
 static void spawn_front(Particle *p) {
-  p->x = rand_float((float)pad, (float)(width - pad));
-  p->y = rand_float((float)pad, (float)(height - pad));
-  p->v = rand_float(0.1f, 1.0f);
-  p->o = rand_float(0.25f, 0.9f);
+  p->x = rng_float(&seed, (float)pad, (float)(width - pad));
+  p->y = rng_float(&seed, (float)pad, (float)(height - pad));
+  p->v = rng_float(&seed, 0.1f, 1.0f);
+  p->o = rng_float(&seed, 0.25f, 0.9f);
 }
 
 static int in_box(int x, int y) {
@@ -114,8 +96,8 @@ void draw(void) {
     back[i].x -= back[i].v;
     if (back[i].x < 0.0f) {
       back[i].x = (float)width;
-      back[i].y = rand_float(0.0f, (float)height);
-      back[i].v = rand_float(0.1f, 1.0f);
+      back[i].y = rng_float(&seed, 0.0f, (float)height);
+      back[i].v = rng_float(&seed, 0.1f, 1.0f);
     }
     x = (int)back[i].x;
     y = (int)back[i].y;
@@ -134,8 +116,8 @@ void draw(void) {
     front[i].x += front[i].v;
     if (front[i].x > (float)(width - pad)) {
       front[i].x = (float)pad;
-      front[i].y = rand_float((float)pad, (float)(height - pad));
-      front[i].v = rand_float(0.1f, 1.0f);
+      front[i].y = rng_float(&seed, (float)pad, (float)(height - pad));
+      front[i].v = rng_float(&seed, 0.1f, 1.0f);
     }
     x = (int)front[i].x;
     y = (int)front[i].y;

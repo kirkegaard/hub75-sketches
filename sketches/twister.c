@@ -1,5 +1,6 @@
 #include "graphics.h"
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -37,16 +38,6 @@ static const uint8_t kPastel[SLICES][3] = {
 
 static float *zbuf = NULL;
 static int zcap = 0;
-
-static int clamp_byte(int v) {
-  if (v < 0) {
-    return 0;
-  }
-  if (v > 255) {
-    return 255;
-  }
-  return v;
-}
 
 /* Yaw, then tilt the column toward the eye. The tilt pivots on the
    column axis, so the stack stays centered. */

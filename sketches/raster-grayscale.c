@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 
@@ -12,16 +13,6 @@ static const uint8_t kGray[BARS] = {90, 163, 131, 86};
 
 /* Center line outward. The last step is still lit, so the edge is a line. */
 static const uint8_t kRamp[5] = {255, 220, 160, 110, 70};
-
-static int clamp_byte(int v) {
-  if (v < 0) {
-    return 0;
-  }
-  if (v > 255) {
-    return 255;
-  }
-  return v;
-}
 
 void setup(void) {}
 

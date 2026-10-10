@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -21,20 +22,6 @@ static int count;
 static float radius_min;
 static float radius_max;
 static bool freeze = true;
-
-static float mapf(float v, float l1, float h1, float l2, float h2) {
-  return l2 + (h2 - l2) * (v - l1) / (h1 - l1);
-}
-
-static int clamp_int(int v, int lo, int hi) {
-  if (v < lo) {
-    return lo;
-  }
-  if (v > hi) {
-    return hi;
-  }
-  return v;
-}
 
 void setup(void) {
   int short_side = width < height ? width : height;

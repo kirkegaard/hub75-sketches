@@ -32,6 +32,10 @@ ARDUINO_CLI ?= $(ARDUINO_CLI_CANDIDATE)
 SKETCHES := $(sort $(notdir $(basename $(wildcard sketches/*.c))))
 SKETCH_OBJS = $(foreach s,$(SKETCHES),$(BUILD)/sk-$(s).o)
 
+# Shared sketch helpers. Every sketch object depends on these, and the
+# firmware stage copies them next to hub75.h.
+UTIL_HEADERS := include/util.h $(wildcard include/util/*.h)
+
 OBJS = \
 	$(BUILD)/graphics.o \
 	$(BUILD)/runtime.o \
@@ -124,7 +128,7 @@ $(BUILD)/sketch_registry.c: sketches/ $(wildcard sketches/*.c) sim/browser.h Mak
 $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 	$(CC) $(CFLAGS) -c $(BUILD)/sketch_registry.c -o $@
 
-$(BUILD)/sk-%.o: sketches/%.c include/hub75.h | $(BUILD)
+$(BUILD)/sk-%.o: sketches/%.c include/hub75.h $(UTIL_HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
 firmware: check-sketch
@@ -167,7 +171,9 @@ firmware: check-sketch
 	stage="$(BUILD)/firmware-sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h src/graphics.h src/graphics.c "$$stage/"; \
+	cp include/hub75.h include/util.h src/graphics.h src/graphics.c "$$stage/"; \
+	mkdir -p "$$stage/util"; \
+	cp include/util/*.h "$$stage/util/"; \
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \

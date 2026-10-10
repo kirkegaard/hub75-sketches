@@ -1,4 +1,5 @@
 #include "hub75.h"
+#include "util.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -34,15 +35,6 @@ static const uint8_t kInk[3][3] = {
     {0, 255, 255},
 };
 
-static unsigned long my_rand(void) {
-  seed = seed * 1103515245u + 12345u;
-  return (seed / 65536u) % 32768u;
-}
-
-static float rand_float(float min, float max) {
-  return min + (max - min) * ((float)my_rand() / 32767.0f);
-}
-
 static int panel_count(void) {
   int n = (width * height) / 512;
 
@@ -76,13 +68,13 @@ static int panel_size(void) {
 static void init_square(Square *square) {
   float span = (float)height / 256.0f;
 
-  square->x = rand_float((float)square_size * 0.5f,
-                         (float)width - (float)square_size * 0.5f);
+  square->x = rng_float(&seed, (float)square_size * 0.5f,
+                        (float)width - (float)square_size * 0.5f);
   square->y = (float)height + (float)square_size;
-  square->velocity = rand_float(0.5f, 3.0f) * span;
-  square->angle = rand_float(0.0f, 6.2831853f);
-  square->color = (uint8_t)((my_rand() % 3u) + 1u);
-  square->filled = (my_rand() % 2u) == 0u;
+  square->velocity = rng_float(&seed, 0.5f, 3.0f) * span;
+  square->angle = rng_float(&seed, 0.0f, 6.2831853f);
+  square->color = (uint8_t)((rng_next(&seed) % 3u) + 1u);
+  square->filled = (rng_next(&seed) % 2u) == 0u;
 }
 
 static void paint_square(int cx, int cy, int size, float angle, int ink,

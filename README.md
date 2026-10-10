@@ -105,6 +105,8 @@ That file is what the firmware builds too. `SKETCH` only picks which sketch the 
 
 `rect` is the top-left corner and the size. `circle` is the center and the diameter. Their stroke is drawn inside that footprint. `triangle` is three corners in fractional pixels, so a slow turn does not snap. `polygon` is a regular polygon: center, radius out to a vertex, side count, and rotation in radians, with 0 putting a vertex on the right. Their stroke lies on the edges. Fill and stroke start white and enabled. The framebuffer is row-major RGB565.
 
+Besides `hub75.h`, a sketch can `#include "util.h"` for the helpers the sketches share: interpolation primitives (`clampf`, `clamp01`, `clamp_int`, `clamp_byte`, `lerp`, `mapf`, `smoothstep`), the easing set (`ease_in_quad` through `ease_in_out_bounce`; the names follow easings.net), hashes (`hash_mix`, `hash_combine2`, `hash_combine3`, `hash_unit`, `hash_i01`), the RNG (`rng_next`, `rng_float`, which take a `uint32_t *` state the sketch owns), and `gcd_i`. They are `static inline`, split by kind under `include/util/` (primitives in `interp.h`, curves in `ease.h`), so a new one is a small header away. The firmware build stages these headers next to the sketch.
+
 The window and the firmware both step one frame every 33 ms, so a sketch paced on `frameCount` feels the same on both. A headless dump does not sleep; it just runs the requested number of frames. `frameCount` is 30 in a `--frames 30` dump.
 
 ## Firmware
