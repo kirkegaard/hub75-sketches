@@ -39,31 +39,53 @@ int input_handle_event(Hub75Input *input, const SDL_Event *event) {
       if (input->redraw) {
         *input->redraw = 1;
       }
-      fprintf(stderr, "led shape: %s\n",
-              hub75_led_shape_name(input->panel->shape));
       return 0;
     }
+
+    // Reset
+    if (event->key.key == SDLK_R) {
+      browser_reset();
+      unpause(input);
+      if (input->redraw) {
+        *input->redraw = 1;
+      }
+      return 0;
+    }
+
+    // Browser
     if (event->key.key == SDLK_B) {
       browser_toggle();
       return 0;
     }
+
+    // Pause
     if (event->key.key == SDLK_P) {
       if (input->paused) {
         *input->paused = !*input->paused;
-        fprintf(stderr, "%s\n", *input->paused ? "paused" : "resumed");
       }
       return 0;
     }
+
+    // Fullscreen
+    if (event->key.key == SDLK_F) {
+      toggle_fullscreen(input->window);
+      return 0;
+    }
+
+    // Previous sketch
     if (event->key.key == SDLK_LEFT) {
       browser_step(-1);
       unpause(input);
       return 0;
     }
+
+    // Next sketch
     if (event->key.key == SDLK_RIGHT) {
       browser_step(1);
       unpause(input);
       return 0;
     }
+
     if (browser_is_open()) {
       if (event->key.key == SDLK_UP) {
         browser_move(-1);
@@ -79,15 +101,19 @@ int input_handle_event(Hub75Input *input, const SDL_Event *event) {
         return 0;
       }
     }
+
+    // On board buttons
     if (event->key.key == SDLK_UP) {
       g_up = 1;
     } else if (event->key.key == SDLK_DOWN) {
       g_down = 1;
-    } else if (event->key.key == SDLK_F) {
-      toggle_fullscreen(input->window);
-    } else if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_Q) {
+    }
+
+    // Quit
+    if (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_Q) {
       return 1;
     }
+
   } else if (event->type == SDL_EVENT_KEY_UP) {
     if (event->key.key == SDLK_UP) {
       g_up = 0;

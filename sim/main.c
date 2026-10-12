@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
              height_arg, panel.pitch_name);
     fprintf(stderr,
             "%s  --  b browses sketches, left/right switch, s changes the led "
-            "shape, p pauses, arrows are the board buttons, f toggles "
+            "shape, r resets, p pauses, arrows are the board buttons, f toggles "
             "fullscreen, q or esc closes\n",
             title);
     sim_window_run(title, &panel);

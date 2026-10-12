@@ -8,6 +8,7 @@ static int same_word(const char *a, const char *b) {
   if (!a || !b) {
     return 0;
   }
+
   while (*a != '\0' && *b != '\0') {
     char ca = *a;
     char cb = *b;
@@ -23,6 +24,7 @@ static int same_word(const char *a, const char *b) {
     a++;
     b++;
   }
+
   return *a == '\0' && *b == '\0';
 }
 
@@ -64,21 +66,29 @@ int hub75_panel_init(Hub75Panel *panel, int matrix_w, int matrix_h,
   if (!panel || matrix_w <= 0 || matrix_h <= 0) {
     return -1;
   }
+
   found = find_pitch(pitch);
+
   if (!found) {
     return -1;
   }
+
   pixels = (size_t)matrix_w * (size_t)found->pitch_px;
   pixels *= (size_t)matrix_h * (size_t)found->pitch_px;
+
   if (matrix_h != 0 && found->pitch_px != 0 &&
       pixels / ((size_t)matrix_h * (size_t)found->pitch_px) !=
           (size_t)matrix_w * (size_t)found->pitch_px) {
+
     return -1;
   }
+
   rgb = (uint8_t *)malloc(pixels * 3u);
+
   if (!rgb) {
     return -1;
   }
+
   free(panel->rgb);
   memset(panel, 0, sizeof *panel);
   panel->matrix_w = matrix_w;
@@ -210,14 +220,16 @@ void hub75_panel_render(Hub75Panel *panel, const uint16_t *fb) {
   if (!panel || !panel->rgb) {
     return;
   }
-  hub75_leds_render(panel->rgb, panel->pitch_px, panel->led_px, panel->shape, fb,
-                    panel->matrix_w, panel->matrix_h);
+
+  hub75_leds_render(panel->rgb, panel->pitch_px, panel->led_px, panel->shape,
+                    fb, panel->matrix_w, panel->matrix_h);
 }
 
 void hub75_panel_free(Hub75Panel *panel) {
   if (!panel) {
     return;
   }
+
   free(panel->rgb);
   panel->rgb = NULL;
 }

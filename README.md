@@ -23,7 +23,7 @@ make sim
 
 That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `f` to toggle fullscreen, or `q` or esc to close the window.
 
-The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys are the board's two user buttons; when it is open they move the list instead. Press `s` to cycle the lit LED shape between a circle and a square, and `p` to pause the sketch.
+The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys are the board's two user buttons; when it is open they move the list instead. Press `s` to cycle the lit LED shape between a circle and a square, `r` to reset the running sketch (like the board's reset button), and `p` to pause the sketch.
 
 `make sim` also accepts the sketch, the LED count, and the pitch:
 

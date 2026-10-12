@@ -96,6 +96,14 @@ void browser_move(int delta) {
 
 void browser_commit(void) { apply(); }
 
+void browser_reset(void) {
+  if (hub75_sketch_count < 1) {
+    return;
+  }
+  g_selection = g_current;
+  apply();
+}
+
 void browser_step(int delta) {
   browser_set_selection(g_selection + delta);
   apply();

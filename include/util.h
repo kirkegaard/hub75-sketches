@@ -4,9 +4,11 @@
 /* Shared helpers for sketches. Split by kind so each can grow on its
    own: include this umbrella, or a single header under util/. */
 
-#include "util/ease.h"   // IWYU pragma: export
-#include "util/hash.h"   // IWYU pragma: export
-#include "util/interp.h" // IWYU pragma: export
-#include "util/rand.h"   // IWYU pragma: export
+// IWYU pragma: begin_exports
+#include "util/ease.h"
+#include "util/hash.h"
+#include "util/interp.h"
+#include "util/rand.h"
+// IWYU pragma: end_exports
 
 #endif

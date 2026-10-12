@@ -30,6 +30,9 @@ void browser_move(int delta);
 /* Load the highlighted sketch. */
 void browser_commit(void);
 
+/* Restart the running sketch from scratch, like the board's reset button. */
+void browser_reset(void);
+
 /* Highlight and load the previous (-1) or next (+1) sketch. */
 void browser_step(int delta);
 
