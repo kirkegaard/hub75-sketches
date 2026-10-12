@@ -5,6 +5,7 @@
 #include "hub75.h"
 
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* The build generates hub75_sketches[] and hub75_sketch_count from the
@@ -13,6 +14,9 @@ static int g_current = 0;
 static int g_selection = 0;
 static int g_open = 0;
 static int g_scroll = 0;
+static Hub75SwitchHook g_switch_hook = NULL;
+
+void browser_set_transition_hook(Hub75SwitchHook hook) { g_switch_hook = hook; }
 
 void browser_init(const char *default_name) {
   int i;
@@ -70,19 +74,47 @@ void browser_set_selection(int index) {
 
 /* Start the highlighted sketch. frameCount drops back to zero so the
    next draw() is frame 1, and the drawing state resets so a sketch
-   that turned fill off does not leak into the next one. */
+   that turned fill off does not leak into the next one.
+
+   When the simulator installed a switch hook, run the incoming sketch's
+   first frame here and hand both frames to the hook, which animates from
+   the old image to the new one. The window loop then drives the
+   animation instead of calling draw(). Without a hook, switch instantly
+   as before and let the loop produce frame 1. */
 static void apply(void) {
   size_t count;
+  uint16_t *src;
 
   if (hub75_sketch_count < 1) {
     return;
+  }
+
+  count = (size_t)width * (size_t)height;
+
+  if (g_switch_hook && hub75_pixels() && count > 0) {
+    src = (uint16_t *)malloc(count * sizeof(uint16_t));
+    if (src) {
+      memcpy(src, hub75_pixels(), count * sizeof(uint16_t));
+
+      g_current = g_selection;
+      frameCount = 0;
+      hub75_gfx_reset();
+      memset(hub75_pixels(), 0, count * sizeof(uint16_t));
+      hub75_sketches[g_current].setup();
+
+      frameCount = 1;
+      hub75_sketches[g_current].draw();
+
+      g_switch_hook(src, hub75_pixels(), width, height);
+      free(src);
+      return;
+    }
   }
 
   g_current = g_selection;
   frameCount = 0;
   hub75_gfx_reset();
 
-  count = (size_t)width * (size_t)height;
   if (hub75_pixels() && count > 0) {
     memset(hub75_pixels(), 0, count * sizeof(uint16_t));
   }
@@ -90,9 +122,7 @@ static void apply(void) {
   hub75_sketches[g_current].setup();
 }
 
-void browser_move(int delta) {
-  browser_set_selection(g_selection + delta);
-}
+void browser_move(int delta) { browser_set_selection(g_selection + delta); }
 
 void browser_commit(void) { apply(); }
 

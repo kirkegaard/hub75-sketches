@@ -1,6 +1,8 @@
 #ifndef HUB75_BROWSER_H
 #define HUB75_BROWSER_H
 
+#include <stdint.h>
+
 /* The sketch browser is a simulator feature, not a sketch. The build
    links every file in sketches/ and generates a table of these
    entries. The browser picks one at a time and the simulator's
@@ -11,6 +13,13 @@ typedef struct Hub75Sketch {
   void (*setup)(void);
   void (*draw)(void);
 } Hub75Sketch;
+
+typedef void (*Hub75SwitchHook)(const uint16_t *src, const uint16_t *dst, int w,
+                                int h);
+
+/* Set the hook that animates the framebuffer from one sketch's last frame to
+ * the next sketch's first frame. */
+void browser_set_transition_hook(Hub75SwitchHook hook);
 
 extern const Hub75Sketch hub75_sketches[];
 extern const int hub75_sketch_count;
@@ -56,7 +65,7 @@ typedef struct BrowserLayout {
   int count;
 } BrowserLayout;
 
-/* Fill `out` for a view of view_w by view_h. Keeps the highlighted
+/* Fill out for a view of view_w by view_h. Keeps the highlighted
    row on screen and clamps the scroll offset. */
 void browser_layout(int view_w, int view_h, BrowserLayout *out);
 

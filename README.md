@@ -34,6 +34,12 @@ make sim SKETCH=drift PITCH=P4
 make sim SKETCH=lattice WIDTH=64 HEIGHT=32 PITCH=P2.5
 ```
 
+By default every sketch in `sketches/` is linked and listed in the browser. Pass `SKETCHES` to build a smaller rotation, which is handy for trying the switch transition on a few sketches:
+
+```sh
+make sim SKETCHES="drift cube steps lattice"
+```
+
 `WIDTH` and `HEIGHT` are LED counts. Typical panels step by 32 (32, 64, 128). The default is 128—64.
 
 ### Pitch

@@ -8,6 +8,7 @@
 #include "hub75.h"
 #include "input.h"
 #include "panel.h"
+#include "transition.h"
 #include "window.h"
 
 #include <stdint.h>
@@ -37,6 +38,11 @@ typedef struct View {
 static void render_frame(View *v) {
   hub75_leds_render(v->rgb, v->cell, v->diameter, v->panel->shape,
                     hub75_pixels(), v->panel->matrix_w, v->panel->matrix_h);
+}
+
+static void begin_transition(const uint16_t *src, const uint16_t *dst, int w,
+                             int h) {
+  transition_begin(src, dst, w, h);
 }
 
 static void step_frame(View *v) {
@@ -76,6 +82,7 @@ static void draw_text(SDL_Renderer *r, int x, int y, int scale,
         }
       }
     }
+
     x += (HUB75_FONT_W + 1) * scale;
   }
 }
@@ -94,10 +101,13 @@ static void draw_overlay(View *v) {
   }
 
   SDL_SetRenderDrawBlendMode(v->renderer, SDL_BLENDMODE_BLEND);
+
   fill_rect(v->renderer, (float)layout.x, (float)layout.y, (float)layout.w,
             (float)layout.h, 10, 10, 14, 235);
+
   fill_rect(v->renderer, (float)layout.x, (float)layout.y, (float)layout.w,
             (float)layout.title_h, 44, 44, 58, 255);
+
   draw_text(v->renderer, layout.x + layout.pad,
             layout.y + (layout.title_h - HUB75_FONT_H * layout.scale) / 2,
             layout.scale, "sketches", 235, 235, 245);
@@ -183,12 +193,15 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
      only when the panel is wider or taller than the screen. */
   v.cell = panel->pitch_px;
   fit = max_w / panel->matrix_w;
+
   if (max_h / panel->matrix_h < fit) {
     fit = max_h / panel->matrix_h;
   }
+
   if (fit < 1) {
     fit = 1;
   }
+
   if (fit < v.cell) {
     v.cell = fit;
   }
@@ -256,6 +269,8 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
   input.view_w = v.view_w;
   input.view_h = v.view_h;
 
+  browser_set_transition_hook(begin_transition);
+
   step_frame(&v);
   present(&v);
   next = SDL_GetTicks() + 33;
@@ -288,11 +303,19 @@ void sim_window_run(const char *title, Hub75Panel *panel) {
     now = SDL_GetTicks();
 
     if ((Sint64)(now - next) >= 0) {
-      if (!v.paused) {
-        step_frame(&v);
+      if (transition_active()) {
+        transition_step(hub75_pixels());
+        render_frame(&v);
+        present(&v);
+      } else {
+        if (!v.paused) {
+          step_frame(&v);
+        }
+        present(&v);
       }
-      present(&v);
+
       next += 33;
+
       if ((Sint64)(now - next) >= 0) {
         next = now + 33;
       }

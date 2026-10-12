@@ -32,6 +32,11 @@ ARDUINO_CLI ?= $(ARDUINO_CLI_CANDIDATE)
 SKETCHES := $(sort $(notdir $(basename $(wildcard sketches/*.c))))
 SKETCH_OBJS = $(foreach s,$(SKETCHES),$(BUILD)/sk-$(s).o)
 
+# A stamp of the sketch list so the registry regenerates when SKETCHES is
+# overridden on the command line, e.g. to try transitions on a few sketches:
+#   make sim SKETCHES="drift cube steps lattice"
+SKETCHES_STAMP = $(BUILD)/.sketches
+
 # Shared sketch helpers. Every sketch object depends on these, and the
 # firmware stage copies them next to hub75.h.
 UTIL_HEADERS := include/util.h $(wildcard include/util/*.h)
@@ -39,6 +44,7 @@ UTIL_HEADERS := include/util.h $(wildcard include/util/*.h)
 OBJS = \
 	$(BUILD)/graphics.o \
 	$(BUILD)/runtime.o \
+	$(BUILD)/transition.o \
 	$(BUILD)/panel.o \
 	$(BUILD)/ppm.o \
 	$(BUILD)/input.o \
@@ -49,7 +55,7 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl clean
+.PHONY: sim firmware flash check-sketch check-sdl clean FORCE
 
 sim: check-sketch check-sdl $(TARGET)
 	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) $(ARGS)
@@ -80,6 +86,9 @@ $(BUILD):
 $(BUILD)/graphics.o: src/graphics.c include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/graphics.c -o $@
 
+$(BUILD)/transition.o: src/transition.c src/transition.h $(UTIL_HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c src/transition.c -o $@
+
 $(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h sim/input.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c src/runtime.c -o $@
 
@@ -95,7 +104,7 @@ $(BUILD)/ppm.o: sim/ppm.c sim/ppm.h | $(BUILD)
 $(BUILD)/main-$(SKETCH).o: sim/main.c include/hub75.h src/graphics.h src/runtime.h sim/panel.h sim/ppm.h sim/window.h sim/browser.h | $(BUILD)
 	$(CC) $(CFLAGS) -DHUB75_SKETCH_NAME=\"$(SKETCH)\" -c sim/main.c -o $@
 
-$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h sim/browser.h sim/font5x7.h | $(BUILD)
+$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h src/transition.h sim/browser.h sim/font5x7.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/window.c -o $@
 
 $(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h sim/font5x7.h | $(BUILD)
@@ -104,10 +113,14 @@ $(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h s
 $(BUILD)/font5x7.o: sim/font5x7.c sim/font5x7.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/font5x7.c -o $@
 
-# The registry lists every sketch in sketches/ so the browser can show
-# them. It depends on the folder itself, not just the files, so a rename
-# (which keeps the file's mtime) still regenerates it.
-$(BUILD)/sketch_registry.c: sketches/ $(wildcard sketches/*.c) sim/browser.h Makefile | $(BUILD)
+# The registry lists the sketches in SKETCHES so the browser can show them.
+# It depends on the folder itself, not just the files, so a rename (which
+# keeps the file's mtime) still regenerates it, and on the stamp so a
+# different SKETCHES (a subset) rebuilds it too.
+$(SKETCHES_STAMP): FORCE | $(BUILD)
+	@printf '%s\n' $(SKETCHES) | cmp -s - $@ || printf '%s\n' $(SKETCHES) > $@
+
+$(BUILD)/sketch_registry.c: $(SKETCHES_STAMP) sketches/ $(wildcard sketches/*.c) sim/browser.h Makefile | $(BUILD)
 	@{ \
 		echo '#include "browser.h"'; \
 		for s in $(SKETCHES); do \
