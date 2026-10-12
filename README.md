@@ -154,6 +154,10 @@ Buttons are active low and the board has no external pull-ups, so the firmware e
 
 Address E is GPIO 21. The learn guide's "Address E Line Jumper" is about the HUB75 connector, not that GPIO: the jumper ships closed to connector pin 8, which is what Adafruit's 64-row panels use. Other panels that want E on connector pin 16 need the trace cut and the other pad bridged. GPIO 8 on this board is the RX pad.
 
+### CH552
+
+The same sketches also build for a CH552 driving an 8x8 WS2812 matrix (the GBC-DCPixel board): `make firmware-ch552 SKETCH=steps` and `make flash-ch552`. This needs `arduino-cli core install CH55xDuino:mcs51`, and it drops the float shape helpers to fit 14 KB flash.
+
 ## Layout
 
 - `include/hub75.h` — sketch API

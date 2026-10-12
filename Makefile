@@ -7,6 +7,15 @@ ARGS ?=
 FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
 PORT ?=
 
+# Secondary target: a CH552 (ch55xduino) driving an 8x8 WS2812 matrix, the
+# board from nataliethenerd/GBC-DCPixel. Its own core and FQBN; the ESP32
+# target above is unchanged.
+CH55X_FQBN ?= CH55xDuino:mcs51:ch552:clock=16internal
+CH55X_CORE ?= CH55xDuino:mcs51
+CH55X_URL := https://raw.githubusercontent.com/DeqingSun/ch55xduino/ch55xduino/package_ch55xduino_mcs51_index.json
+CH552_WIDTH ?= 8
+CH552_HEIGHT ?= 8
+
 CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim
 
 PKG_CONFIG ?= pkg-config
@@ -49,7 +58,7 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl clean
+.PHONY: sim firmware flash firmware-ch552 flash-ch552 check-sketch check-sdl clean
 
 sim: check-sketch check-sdl $(TARGET)
 	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) $(ARGS)
@@ -171,7 +180,7 @@ firmware: check-sketch
 	stage="$(BUILD)/firmware-sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h include/util.h src/graphics.h src/graphics.c "$$stage/"; \
+	cp include/hub75.h include/util.h include/sprites.h src/graphics.h src/graphics.c "$$stage/"; \
 	mkdir -p "$$stage/util"; \
 	cp include/util/*.h "$$stage/util/"; \
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
@@ -190,6 +199,65 @@ flash: firmware
 		exit 1; \
 	fi
 	@"$(ARDUINO_CLI)" upload -p "$(PORT)" --fqbn "$(FQBN)" --input-dir "$(BUILD)/firmware-out"
+
+# CH552 + 8x8 WS2812 matrix (ch55xduino). Separate core, separate stage;
+# the ESP32 and simulator targets are untouched.
+#
+# The CH552 has 14 KB flash and 876 B external RAM, so the build drops the
+# float shape helpers (triangle/polygon) with HUB75_NO_FLOAT_SHAPES. That
+# fits the integer-only sketches; a sketch that calls triangle, polygon, or
+# libm float functions will not link or will overflow.
+firmware-ch552: check-sketch
+	@cli="$(ARDUINO_CLI)"; \
+	fqbn="$(CH55X_FQBN)"; \
+	if [ ! -x "$$cli" ]; then \
+		echo "error: arduino-cli not found."; \
+		echo "The simulator does not need it. Build that with: make sim"; \
+		echo ""; \
+		echo "To build CH552 firmware, install Arduino CLI and then:"; \
+		echo "  arduino-cli config init"; \
+		echo "  arduino-cli config add board_manager.additional_urls $(CH55X_URL)"; \
+		echo "  arduino-cli core update-index"; \
+		echo "  arduino-cli core install $(CH55X_CORE)"; \
+		echo "  make firmware-ch552 SKETCH=$(SKETCH)"; \
+		exit 1; \
+	fi; \
+	if ! "$$cli" core list 2>/dev/null | grep -q "$(CH55X_CORE)"; then \
+		echo "error: core $(CH55X_CORE) is not installed."; \
+		echo "The Matrix Portal S3 and the simulator are unaffected."; \
+		echo ""; \
+		echo "  arduino-cli config add board_manager.additional_urls $(CH55X_URL)"; \
+		echo "  arduino-cli core update-index"; \
+		echo "  arduino-cli core install $(CH55X_CORE)"; \
+		echo "  make firmware-ch552 SKETCH=$(SKETCH)"; \
+		exit 1; \
+	fi; \
+	stage="$(BUILD)/ch552-sketch"; \
+	rm -rf "$$stage"; \
+	mkdir -p "$$stage"; \
+	cp include/hub75.h include/util.h include/sprites.h src/graphics.h src/graphics.c "$$stage/"; \
+	mkdir -p "$$stage/util"; \
+	cp include/util/*.h "$$stage/util/"; \
+	cp firmware/runtime_fw.c "$$stage/"; \
+	cp firmware/ch552/matrix.h firmware/ch552/matrix.c firmware/ch552/buttons.c firmware/ch552/glue.c firmware/ch552/alloc.c "$$stage/"; \
+	cp firmware/ch552/sketch.ino "$$stage/ch552-sketch.ino"; \
+	cp sketches/$(SKETCH).c "$$stage/sketch_user.h"; \
+	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n' \
+		"$(CH552_WIDTH)" "$(CH552_HEIGHT)" > "$$stage/config.h"; \
+	echo "compiling $(SKETCH) for $$fqbn ($(CH552_WIDTH)x$(CH552_HEIGHT))"; \
+	"$$cli" compile --fqbn "$$fqbn" \
+		--build-property "compiler.c.extra_flags=-DHUB75_NO_FLOAT_SHAPES" \
+		--build-property "compiler.cpp.extra_flags=-DHUB75_NO_FLOAT_SHAPES" \
+		--output-dir "$(BUILD)/ch552-out" "$$stage"
+
+flash-ch552: firmware-ch552
+	@if [ -z "$(PORT)" ]; then \
+		echo "error: set PORT to the CH552's serial device."; \
+		echo "  arduino-cli board list"; \
+		echo "  make flash-ch552 PORT=/dev/cu.usbmodem1101 SKETCH=$(SKETCH)"; \
+		exit 1; \
+	fi
+	@"$(ARDUINO_CLI)" upload -p "$(PORT)" --fqbn "$(CH55X_FQBN)" --input-dir "$(BUILD)/ch552-out"
 
 clean:
 	rm -rf $(BUILD)

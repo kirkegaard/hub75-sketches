@@ -184,6 +184,12 @@ void rect(int x, int y, int w, int h) {
   }
 }
 
+#ifndef HUB75_NO_FLOAT_SHAPES
+/* triangle, polygon, and the edge/fill helpers use float coordinates.
+   SDCC compiles them to several kilobytes on top of the float library and
+   a slab of internal RAM, which the CH552 (14 KB flash, 876 B external
+   RAM) cannot spare. The CH552 firmware defines HUB75_NO_FLOAT_SHAPES to
+   drop them. The simulator and the ESP32 leave the macro unset. */
 static void fill_tri(float x0, float y0, float x1, float y1, float x2,
                       float y2) {
   float area;
@@ -322,6 +328,8 @@ void polygon(int cx, int cy, float radius, int sides, float rotation) {
     line(prev_x, prev_y, first_x, first_y);
   }
 }
+
+#endif /* HUB75_NO_FLOAT_SHAPES */
 
 void circle(int cx, int cy, int d) {
   int r;
