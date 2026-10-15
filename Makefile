@@ -4,6 +4,8 @@ HEIGHT ?= 64
 PITCH ?= P1
 ROTATE ?= 0
 BRIGHTNESS ?= 255
+SATURATION ?= 100
+GAMMA ?= 1.0
 ARGS ?=
 
 FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
@@ -42,6 +44,7 @@ OBJS = \
 	$(BUILD)/graphics.o \
 	$(BUILD)/runtime.o \
 	$(BUILD)/brightness.o \
+	$(BUILD)/color.o \
 	$(BUILD)/panel.o \
 	$(BUILD)/ppm.o \
 	$(BUILD)/input.o \
@@ -52,7 +55,7 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness clean
+.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness check-color clean
 
 sim: check-sketch check-sdl $(TARGET)
 	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) --rotate $(ROTATE) --brightness $(BRIGHTNESS) $(ARGS)
@@ -107,6 +110,20 @@ check-brightness:
 		exit 1; \
 	fi
 
+check-color:
+	@case "$(SATURATION)" in \
+		''|*[!0-9]*) echo "error: SATURATION must be an integer from 0 to 200 (got $(SATURATION))"; \
+		   exit 1 ;; \
+	esac; \
+	if [ "$(SATURATION)" -gt 200 ]; then \
+		echo "error: SATURATION must be an integer from 0 to 200 (got $(SATURATION))"; \
+		exit 1; \
+	fi
+	@printf '%s' "$(GAMMA)" | grep -Eq '^[0-9]+(\.[0-9]+)?$$' || { \
+		echo "error: GAMMA must be a number like 1.0 or 2.2 (got $(GAMMA))"; \
+		exit 1; \
+	}
+
 $(BUILD):
 	mkdir -p $(BUILD)
 
@@ -118,6 +135,9 @@ $(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h |
 
 $(BUILD)/brightness.o: src/brightness.c src/brightness.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/brightness.c -o $@
+
+$(BUILD)/color.o: src/color.c src/color.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/color.c -o $@
 
 $(BUILD)/panel.o: sim/panel.c sim/panel.h src/brightness.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/panel.c -o $@
@@ -167,7 +187,7 @@ $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 $(BUILD)/sk-%.o: sketches/%.c include/hub75.h $(UTIL_HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
-firmware: check-sketch check-rotate check-rows check-brightness
+firmware: check-sketch check-rotate check-rows check-brightness check-color
 	@cli="$(ARDUINO_CLI)"; \
 	fqbn="$(FQBN)"; \
 	if [ ! -x "$$cli" ]; then \
@@ -207,15 +227,15 @@ firmware: check-sketch check-rotate check-rows check-brightness
 	stage="$(BUILD)/sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h include/util.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c "$$stage/"; \
+	cp include/hub75.h include/util.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c src/color.h src/color.c "$$stage/"; \
 	mkdir -p "$$stage/util"; \
 	cp include/util/*.h "$$stage/util/"; \
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \
-	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n' \
-		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" > "$$stage/config.h"; \
-	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS))"; \
+	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n#define HUB75_SATURATION %s\n#define HUB75_GAMMA %sf\n' \
+		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" "$(SATURATION)" "$(GAMMA)" > "$$stage/config.h"; \
+	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA))"; \
 	"$$cli" compile --fqbn "$$fqbn" --output-dir "$(BUILD)/firmware-out" "$$stage"
 
 flash: firmware

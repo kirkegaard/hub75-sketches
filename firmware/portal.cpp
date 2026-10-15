@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "brightness.h"
+#include "color.h"
 #include "graphics.h"
 #include "hub75.h"
 }
@@ -194,7 +195,8 @@ extern "C" void portal_present(void) {
       }
 
       dst[(size_t)ey * (size_t)phys_w + (size_t)ex] = hub75_dim565(
-          src[(size_t)ly * (size_t)width + (size_t)lx], brightness);
+          hub75_correct565(src[(size_t)ly * (size_t)width + (size_t)lx]),
+          brightness);
     }
   }
 

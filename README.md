@@ -129,6 +129,7 @@ Board: Adafruit Matrix Portal S3 (ESP32-S3, 8 MB flash, 2 MB RAM), one HUB75 pan
 ```sh
 make firmware SKETCH=drift WIDTH=128 HEIGHT=64
 make firmware SKETCH=drift BRIGHTNESS=64
+make firmware SKETCH=drift GAMMA=2.2 SATURATION=85
 ```
 
 This needs `arduino-cli`, the Espressif ESP32 core (it contains the Matrix Portal S3 board), and Adafruit Protomatter. Adafruit GFX comes in with Protomatter. If any of that is missing, `make firmware` prints the install commands and exits. The simulator does not use them.
@@ -152,6 +153,15 @@ make flash PORT=/dev/cu.usbmodem1101 SKETCH=drift
 
 `HEIGHT` must be 16, 32, or 64 so the address line count is 3, 4, or 5; a build with any other `HEIGHT` stops with a note to use `ROTATE` instead. `ROTATE` (0, 90, 180, or 270) turns the sketch's view on the panel, so a rotated 128—64 panel shows a 64—128 canvas. A 64-row panel uses address E. Protomatter is asked for 4-bit color and a double buffer first. If `begin()` fails (usually DMA RAM), the build falls back to a single buffer, then to 4-bit's smaller cousin, depth 3. Each frame is copied from the sketch's RGB565 buffer into Protomatter's canvas, reoriented for `ROTATE`, and `show()` pushes it. The C++ is only `firmware/portal.cpp`. Sketch `setup` / `draw` stay C; the firmware build renames those two symbols so they do not collide with Arduino's `setup`.
 
+### Color
+
+The framebuffer is display-referred: the simulator shows it directly on an sRGB monitor. A HUB75 panel is not a monitor. It drives linear-PWM LEDs with narrow-band emitters and true-black gaps, so the same RGB565 sample looks brighter and more saturated on the board, most of all in the midtones. Two firmware-only knobs narrow that gap. The simulator stays the reference, so it does not apply them.
+
+- `SATURATION` (percent, 0 to 200, default 100) mixes each pixel toward its luma. Lower values calm the panel down.
+- `GAMMA` (default 1.0) treats the input as sRGB and linearizes it for the LEDs. `2.2` is the usual starting point; it darkens the midtones so they match the sim.
+
+`100` and `1.0` leave every sample untouched. Both run in `src/color.c` before `BRIGHTNESS` scales the duty, and the build rejects values outside those ranges.
+
 ### Pin map
 
 Taken from CircuitPython `ports/espressif/boards/adafruit_matrixportal_s3/pins.c` (`MTX_R1` through `MTX_OE`, `MTX_ADDRE`) and from `Adafruit_Protomatter` `examples/simple/simple.ino` (`ARDUINO_ADAFRUIT_MATRIXPORTAL_ESP32S3`).
@@ -174,6 +184,7 @@ Address E is GPIO 21. The learn guide's "Address E Line Jumper" is about the HUB
 - `src/graphics.c` — RGB565 drawing
 - `src/runtime.c` — simulator clock
 - `src/brightness.c` — panel brightness and the dim helpers
+- `src/color.c` — panel saturation and gamma correction
 - `sim/panel.c` — CPU raster and the LED shape/pitch model
 - `sim/window.c` — SDL3 window, blit, and the frame loop
 - `sim/input.c` — keyboard and mouse events

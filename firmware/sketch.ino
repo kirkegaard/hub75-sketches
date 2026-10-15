@@ -4,6 +4,7 @@
 #include "portal.h"
 
 #include "brightness.h"
+#include "color.h"
 
 extern "C" {
 extern unsigned long frameCount;
@@ -42,6 +43,7 @@ void setup() {
     }
   }
   hub75_brightness_set(HUB75_BRIGHTNESS);
+  hub75_color_init(HUB75_SATURATION, HUB75_GAMMA);
   hub75_setup();
 }
 
