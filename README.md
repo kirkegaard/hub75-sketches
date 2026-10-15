@@ -162,6 +162,14 @@ The framebuffer is display-referred: the simulator shows it directly on an sRGB 
 
 `100` and `1.0` leave every sample untouched. Both run in `src/color.c` before `BRIGHTNESS` scales the duty, and the build rejects values outside those ranges.
 
+### Color depth
+
+Protomatter drives the panel with binary code modulation, and `DEPTH` (3 to 6, default 4) sets how many bitplanes per channel it uses. More planes mean more shades but a slower refresh, because every extra plane is another pass over the panel. Depth 4 is 16 levels a channel; depth 6 is the full RGB565 and can drop the refresh far enough to visibly blink on a 128-wide panel. Depth 5 (32 levels) is the usual middle ground. The build asks for `DEPTH` first and steps down until one starts. The copy in `firmware/portal.cpp` dithers the levels the panel drops across a 4x4 tile, and a sketch can dither its own 8-bit values into RGB565 with `gray565` in `util.h`, so the intermediate shades come back without touching the refresh.
+
+```sh
+make firmware SKETCH=drift DEPTH=5
+```
+
 ### Pin map
 
 Taken from CircuitPython `ports/espressif/boards/adafruit_matrixportal_s3/pins.c` (`MTX_R1` through `MTX_OE`, `MTX_ADDRE`) and from `Adafruit_Protomatter` `examples/simple/simple.ino` (`ARDUINO_ADAFRUIT_MATRIXPORTAL_ESP32S3`).
