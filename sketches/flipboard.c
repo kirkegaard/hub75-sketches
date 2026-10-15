@@ -1,16 +1,13 @@
 #include "hub75.h"
 #include "util.h"
+#include "util/font3x5.h"
 
 #include <string.h>
 
 /* One rule: a split-flap board. Every tile the sentence uses churns,
    then the letters settle one at a time in reading order, holding
    through a wrap from the end of one line to the start of the next.
-   Then the board flips over into the next sentence.
-
-   The glyph bitmaps are the CC0 "3x5 Microfont" by Ella Jameson
-   (github.com/nimaid/microfont). One u16 per ASCII code, bit 14 is the
-   top-left pixel and bits run left to right, top to bottom. */
+   Then the board flips over into the next sentence. */
 
 static uint16_t bg;
 
@@ -32,30 +29,7 @@ static const char *const sentences[] = {
 
 enum { SENTENCE_COUNT = (int)(sizeof(sentences) / sizeof(sentences[0])) };
 
-static const uint16_t font[128] = {
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
-    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x2482, 0x5a00, 0x5f7d,
-    0x3cfa, 0x52a5, 0x3ceb, 0x2400, 0x1491, 0x4494, 0x5540, 0x05d0, 0x0014,
-    0x01c0, 0x0002, 0x12a4, 0x7b6f, 0x2c97, 0x62a7, 0x628e, 0x1779, 0x798e,
-    0x79ef, 0x72a4, 0x7bef, 0x7bcf, 0x0410, 0x0414, 0x1511, 0x0e38, 0x4454,
-    0x72c2, 0x2b63, 0x2bed, 0x6bae, 0x3923, 0x6b6e, 0x79a7, 0x79a4, 0x396b,
-    0x5bed, 0x7497, 0x126a, 0x5bad, 0x4927, 0x5fed, 0x5ffd, 0x2b6a, 0x6ba4,
-    0x3b73, 0x6bad, 0x388e, 0x7492, 0x5b6f, 0x5b6a, 0x5bfd, 0x5aad, 0x5a92,
-    0x72a7, 0x3493, 0x4889, 0x6496, 0x2a00, 0x0007, 0x4400, 0x076b, 0x4d6e,
-    0x0723, 0x176b, 0x0573, 0x15d2, 0x07ce, 0x49ad, 0x2092, 0x2094, 0x4bad,
-    0x2491, 0x0bed, 0x0d6d, 0x056a, 0x0d74, 0x0759, 0x0564, 0x070e, 0x2691,
-    0x0b6b, 0x0b6a, 0x0b7d, 0x0a95, 0x0aca, 0x0e67, 0x3513, 0x2492, 0x6456,
-    0x00f0, 0x0000,
-};
-
-static const char glyphs[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                             "abcdefghijklmnopqrstuvwxyz"
-                             "0123456789"
-                             ".,:;!?-+*/#%&@";
-
-enum { GLYPH_COUNT = (int)(sizeof(glyphs) - 1) };
+enum { GLYPH_COUNT = (int)(sizeof(font3x5_glyphs) - 1) };
 
 static unsigned char board[MAX_ROWS][MAX_COLS];
 static int max_chars = 1;
@@ -194,10 +168,11 @@ void draw(void) {
             hash_mix(seed ^ ((uint32_t)tick / FLIP_FRAMES) * 2654435761u);
         bits = (f % 7u == 0u)
                    ? 0u
-                   : font[(unsigned char)glyphs[f % (uint32_t)GLYPH_COUNT]];
+                   : font3x5[(unsigned char)font3x5_glyphs
+                                 [f % (uint32_t)GLYPH_COUNT]];
         level = 120 + (int)((f >> 8) % 80u);
       } else {
-        bits = font[board[row][col]];
+        bits = font3x5[board[row][col]];
         level = 255;
       }
 

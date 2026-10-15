@@ -5,6 +5,7 @@
 
 #include "brightness.h"
 #include "color.h"
+#include "netdebug.h"
 
 extern "C" {
 extern unsigned long frameCount;
@@ -36,6 +37,10 @@ static void poll_brightness(void) {
 void setup() {
   Serial.begin(115200);
   delay(200);
+  /* Reset reason: 1 power-on, 3 software, 4 panic, 5/6/7 watchdog,
+     9 brownout. */
+  Serial.printf("boot: reset reason %d, free heap %u\n",
+                (int)esp_reset_reason(), (unsigned)ESP.getFreeHeap());
   if (!portal_begin(HUB75_PANEL_WIDTH, HUB75_PANEL_HEIGHT, HUB75_ROTATE)) {
     Serial.println("HUB75 start failed");
     for (;;) {
@@ -59,5 +64,8 @@ void loop() {
   next_frame = now + FRAME_MS;
   frameCount++;
   hub75_draw();
+#ifdef HUB75_NET_DEBUG
+  net_debug_draw();
+#endif
   portal_present();
 }

@@ -3,6 +3,7 @@
 #include "font5x7.h"
 #include "graphics.h"
 #include "hub75.h"
+#include "netdebug.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -219,4 +220,7 @@ void draw(void) {
   if (sketch) {
     sketch->draw();
   }
+#ifdef HUB75_NET_DEBUG
+  net_debug_draw();
+#endif
 }

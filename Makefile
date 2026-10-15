@@ -7,12 +7,28 @@ BRIGHTNESS ?= 255
 SATURATION ?= 100
 GAMMA ?= 1.0
 DEPTH ?= 4
+BROWNOUT ?= 1
+NETDEBUG ?= 0
 ARGS ?=
 
 FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
 PORT ?=
 
-CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim
+CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim -I. -Ivendor/yyjson
+
+# Vendored yyjson, built read-only: sketches only parse responses, so
+# drop the writer. The JSON Pointer utility (yyjson_ptr_get) stays on.
+YYJSON_DEFS = -DYYJSON_DISABLE_WRITER
+
+# BROWNOUT=0 disables the ESP32 brownout detector, a workaround for
+# running a panel plus WiFi off a weak 5V supply (a laptop USB port).
+# It removes the safety trip, so the rail still has to be good enough.
+BROWNOUT_DEFS := $(if $(filter 0,$(BROWNOUT)),-DHUB75_BROWNOUT_OFF=1,)
+
+# NETDEBUG=1 draws the shared net/ws status overlay on the panel (reset
+# reason, heap, net/ws state and counters) after every sketch frame.
+NETDEBUG_DEFS := $(if $(filter 1,$(NETDEBUG)),-DHUB75_NET_DEBUG=1,)
+CFLAGS += $(NETDEBUG_DEFS)
 
 PKG_CONFIG ?= pkg-config
 SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl3 2>/dev/null)
@@ -21,6 +37,29 @@ ifeq ($(strip $(SDL_LIBS)),)
 SDL_CFLAGS := $(shell sdl3-config --cflags 2>/dev/null)
 SDL_LIBS := $(shell sdl3-config --libs 2>/dev/null)
 endif
+
+# The simulator's fetch() uses libcurl. If pkg-config cannot find it,
+# fall back to -lcurl, which is present in the macOS and Debian SDKs.
+CURL_CFLAGS := $(shell $(PKG_CONFIG) --cflags libcurl 2>/dev/null)
+CURL_LIBS := $(shell $(PKG_CONFIG) --libs libcurl 2>/dev/null)
+ifeq ($(strip $(CURL_LIBS)),)
+CURL_LIBS := -lcurl
+endif
+
+# The simulator's WebSocket transport uses OpenSSL for wss://. Without
+# it, the sim still builds and speaks plain ws:// only.
+OPENSSL_CFLAGS := $(shell $(PKG_CONFIG) --cflags openssl 2>/dev/null)
+OPENSSL_LIBS := $(shell $(PKG_CONFIG) --libs openssl 2>/dev/null)
+ifeq ($(strip $(OPENSSL_LIBS)),)
+WS_TLS_CFLAGS :=
+WS_TLS_LIBS :=
+else
+WS_TLS_CFLAGS := -DWS_SIM_TLS=1 $(OPENSSL_CFLAGS)
+WS_TLS_LIBS := $(OPENSSL_LIBS)
+endif
+
+# Optional local credentials, picked up by net.h and staged for firmware.
+SECRETS := $(wildcard secrets.h)
 
 BUILD = build
 TARGET = $(BUILD)/hub75-$(SKETCH)
@@ -46,6 +85,11 @@ OBJS = \
 	$(BUILD)/runtime.o \
 	$(BUILD)/brightness.o \
 	$(BUILD)/color.o \
+	$(BUILD)/net.o \
+	$(BUILD)/ws.o \
+	$(BUILD)/ws_sim.o \
+	$(BUILD)/netdebug.o \
+	$(BUILD)/yyjson.o \
 	$(BUILD)/panel.o \
 	$(BUILD)/ppm.o \
 	$(BUILD)/input.o \
@@ -56,13 +100,22 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness check-color check-depth clean
+.PHONY: sim firmware flash secrets monitor check-sketch check-sdl check-rotate check-rows check-brightness check-color check-depth clean
+
+# Copy the credential template into place once. secrets.h is gitignored.
+secrets:
+	@if [ -f secrets.h ]; then \
+		echo "secrets.h already exists"; \
+	else \
+		cp secrets.example.h secrets.h; \
+		echo "wrote secrets.h; fill in your WiFi and last.fm values"; \
+	fi
 
 sim: check-sketch check-sdl $(TARGET)
 	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) --rotate $(ROTATE) --brightness $(BRIGHTNESS) $(ARGS)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS) $(SDL_LIBS) -lm
+	$(CC) -o $@ $(OBJS) $(SDL_LIBS) $(CURL_LIBS) $(WS_TLS_LIBS) -lm -pthread
 
 check-sdl:
 	@test -n "$(strip $(SDL_LIBS))" || { \
@@ -147,6 +200,23 @@ $(BUILD)/brightness.o: src/brightness.c src/brightness.h | $(BUILD)
 $(BUILD)/color.o: src/color.c src/color.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/color.c -o $@
 
+$(BUILD)/net.o: sim/net_sim.c include/net.h $(SECRETS) | $(BUILD)
+	$(CC) $(CFLAGS) $(CURL_CFLAGS) -c sim/net_sim.c -o $@
+
+$(BUILD)/ws.o: src/ws.c include/ws.h include/util/base64.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/ws.c -o $@
+
+$(BUILD)/ws_sim.o: sim/ws_sim.c include/ws.h Makefile | $(BUILD)
+	$(CC) $(CFLAGS) $(WS_TLS_CFLAGS) -c sim/ws_sim.c -o $@
+
+$(BUILD)/netdebug.o: src/netdebug.c include/netdebug.h include/hub75.h include/net.h include/ws.h include/util/font3x5.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/netdebug.c -o $@
+
+# Makefile is a prerequisite so a change to YYJSON_DEFS rebuilds this
+# (make does not otherwise track compile-flag changes).
+$(BUILD)/yyjson.o: vendor/yyjson/yyjson.c vendor/yyjson/yyjson.h Makefile | $(BUILD)
+	$(CC) $(CFLAGS) $(YYJSON_DEFS) -c vendor/yyjson/yyjson.c -o $@
+
 $(BUILD)/panel.o: sim/panel.c sim/panel.h src/brightness.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/panel.c -o $@
 
@@ -162,7 +232,9 @@ $(BUILD)/main-$(SKETCH).o: sim/main.c include/hub75.h src/graphics.h src/runtime
 $(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h src/brightness.h sim/browser.h sim/font5x7.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/window.c -o $@
 
-$(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h sim/font5x7.h | $(BUILD)
+# Makefile is a prerequisite of the flag-sensitive objects (NETDEBUG etc.)
+# so a change to a build flag actually rebuilds them.
+$(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h sim/font5x7.h include/netdebug.h Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/browser.c -o $@
 
 $(BUILD)/font5x7.o: sim/font5x7.c sim/font5x7.h | $(BUILD)
@@ -192,7 +264,7 @@ $(BUILD)/sketch_registry.c: sketches/ $(wildcard sketches/*.c) sim/browser.h Mak
 $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 	$(CC) $(CFLAGS) -c $(BUILD)/sketch_registry.c -o $@
 
-$(BUILD)/sk-%.o: sketches/%.c include/hub75.h $(UTIL_HEADERS) | $(BUILD)
+$(BUILD)/sk-%.o: sketches/%.c include/hub75.h include/net.h include/ws.h include/netdebug.h vendor/yyjson/yyjson.h $(UTIL_HEADERS) $(SECRETS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
 firmware: check-sketch check-rotate check-rows check-brightness check-color check-depth
@@ -235,16 +307,28 @@ firmware: check-sketch check-rotate check-rows check-brightness check-color chec
 	stage="$(BUILD)/sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h include/util.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c src/color.h src/color.c "$$stage/"; \
+	cp include/hub75.h include/util.h include/net.h include/ws.h include/netdebug.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c src/color.h src/color.c src/ws.c src/netdebug.c "$$stage/"; \
 	mkdir -p "$$stage/util"; \
 	cp include/util/*.h "$$stage/util/"; \
-	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
+	cp firmware/pins.h firmware/portal.h firmware/portal.cpp firmware/net_fw.cpp firmware/ws_fw.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
+	cp vendor/yyjson/yyjson.h vendor/yyjson/yyjson.c "$$stage/"; \
+	if [ -f secrets.h ]; then cp secrets.h "$$stage/"; fi; \
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \
 	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n#define HUB75_SATURATION %s\n#define HUB75_GAMMA %sf\n#define HUB75_DEPTH %s\n' \
 		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" "$(SATURATION)" "$(GAMMA)" "$(DEPTH)" > "$$stage/config.h"; \
 	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA) depth $(DEPTH))"; \
-	"$$cli" compile --fqbn "$$fqbn" --output-dir "$(BUILD)/firmware-out" "$$stage"
+	"$$cli" compile --fqbn "$$fqbn" --build-property "compiler.c.extra_flags=$(YYJSON_DEFS) -DHUB75_FIRMWARE=1 $(NETDEBUG_DEFS)" --build-property "compiler.cpp.extra_flags=$(BROWNOUT_DEFS) $(NETDEBUG_DEFS)" --output-dir "$(BUILD)/firmware-out" "$$stage"
+
+# Follow the board's Serial output at 115200 (net status, fetch results).
+monitor:
+	@if [ -z "$(PORT)" ]; then \
+		echo "error: set PORT to the Matrix Portal's serial device."; \
+		echo "  arduino-cli board list"; \
+		echo "  make monitor PORT=/dev/cu.usbmodem1101"; \
+		exit 1; \
+	fi
+	@"$(ARDUINO_CLI)" monitor -p "$(PORT)" -b "$(FQBN)" -c baudrate=115200
 
 flash: firmware
 	@if [ -z "$(PORT)" ]; then \
