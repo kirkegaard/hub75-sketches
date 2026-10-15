@@ -18,11 +18,6 @@ typedef struct Hub75Input {
   int view_h;
 } Hub75Input;
 
-/* Matrix Portal S3 user buttons: 1 pressed, 0 released.
-   The simulator maps the up and down arrow keys. */
-int sim_button_up(void);
-int sim_button_down(void);
-
 /* Apply one SDL event. Returns 1 when the window should close. */
 int input_handle_event(Hub75Input *input, const SDL_Event *event);
 

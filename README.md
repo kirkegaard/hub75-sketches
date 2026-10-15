@@ -23,7 +23,7 @@ make sim
 
 That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and opens the panel. The default sketch is `drift`, 128—64, pitch P1. Press `f` to toggle fullscreen, or `q` or esc to close the window.
 
-The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys are the board's two user buttons; when it is open they move the list instead. Press `s` to cycle the lit LED shape between a circle and a square, `r` to reset the running sketch (like the board's reset button), and `p` to pause the sketch.
+The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys dim and brighten the panel; when it is open they move the list instead. The window title shows the current level. Press `s` to cycle the lit LED shape between a circle and a square, `r` to reset the running sketch (like the board's reset button), and `p` to pause the sketch.
 
 `make sim` also accepts the sketch, the LED count, and the pitch:
 
@@ -101,7 +101,6 @@ That file is what the firmware builds too. `SKETCH` only picks which sketch the 
 - `color(r, g, b)` packs 8-bit channels into RGB565
 - `background`, `fill`, `noFill`, `stroke`, `noStroke`, `strokeWeight`
 - `point`, `line`, `rect(x, y, w, h)`, `circle(x, y, diameter)`, `triangle`, `polygon`
-- `buttonUp()`, `buttonDown()` return 1 when pressed
 
 `rect` is the top-left corner and the size. `circle` is the center and the diameter. Their stroke is drawn inside that footprint. `triangle` is three corners in fractional pixels, so a slow turn does not snap. `polygon` is a regular polygon: center, radius out to a vertex, side count, and rotation in radians, with 0 putting a vertex on the right. Their stroke lies on the edges. Fill and stroke start white and enabled. The framebuffer is row-major RGB565.
 
@@ -111,7 +110,7 @@ The window and the firmware both step one frame every 33 ms, so a sketch paced o
 
 ## Firmware
 
-Board: Adafruit Matrix Portal S3 (ESP32-S3, 8 MB flash, 2 MB RAM), one HUB75 panel. WiFi, BLE, and the LIS3DH are out of scope. The up and down buttons are readable from the sketch.
+Board: Adafruit Matrix Portal S3 (ESP32-S3, 8 MB flash, 2 MB RAM), one HUB75 panel. WiFi, BLE, and the LIS3DH are out of scope. The up and down buttons dim and brighten the panel.
 
 ```sh
 make firmware SKETCH=drift WIDTH=128 HEIGHT=64
@@ -150,7 +149,7 @@ Taken from CircuitPython `ports/espressif/boards/adafruit_matrixportal_s3/pins.c
 | CLK, LAT, OE | 2, 47, 14 |
 | Button up, button down | 6, 7 |
 
-Buttons are active low and the board has no external pull-ups, so the firmware enables the internal pull-up. A press reads as 1 from `buttonUp()` / `buttonDown()`.
+Buttons are active low and the board has no external pull-ups, so the firmware enables the internal pull-up. A press steps the brightness; Protomatter has no brightness setting, so `portal_present` scales each RGB565 sample before the copy, the same way the simulator scales its LEDs. The buttons are no longer part of the sketch API.
 
 Address E is GPIO 21. The learn guide's "Address E Line Jumper" is about the HUB75 connector, not that GPIO: the jumper ships closed to connector pin 8, which is what Adafruit's 64-row panels use. Other panels that want E on connector pin 16 need the trace cut and the other pad bridged. GPIO 8 on this board is the RX pad.
 
@@ -158,7 +157,8 @@ Address E is GPIO 21. The learn guide's "Address E Line Jumper" is about the HUB
 
 - `include/hub75.h` — sketch API
 - `src/graphics.c` — RGB565 drawing
-- `src/runtime.c` — simulator clock and button reads
+- `src/runtime.c` — simulator clock
+- `src/brightness.c` — panel brightness and the dim helpers
 - `sim/panel.c` — CPU raster and the LED shape/pitch model
 - `sim/window.c` — SDL3 window, blit, and the frame loop
 - `sim/input.c` — keyboard and mouse events

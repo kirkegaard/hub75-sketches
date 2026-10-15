@@ -1,17 +1,10 @@
 #include "input.h"
 
+#include "brightness.h"
 #include "browser.h"
-#include "hub75.h"
 #include "panel.h"
 
 #include <stdio.h>
-
-static int g_up = 0;
-static int g_down = 0;
-
-int sim_button_up(void) { return g_up; }
-
-int sim_button_down(void) { return g_down; }
 
 static void toggle_fullscreen(SDL_Window *window) {
   bool fullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
@@ -102,11 +95,20 @@ int input_handle_event(Hub75Input *input, const SDL_Event *event) {
       }
     }
 
-    // On board buttons
+    // On board buttons: up brightens, down dims
     if (event->key.key == SDLK_UP) {
-      g_up = 1;
-    } else if (event->key.key == SDLK_DOWN) {
-      g_down = 1;
+      hub75_brightness_up();
+      if (input->redraw) {
+        *input->redraw = 1;
+      }
+      return 0;
+    }
+    if (event->key.key == SDLK_DOWN) {
+      hub75_brightness_down();
+      if (input->redraw) {
+        *input->redraw = 1;
+      }
+      return 0;
     }
 
     // Quit
@@ -114,12 +116,6 @@ int input_handle_event(Hub75Input *input, const SDL_Event *event) {
       return 1;
     }
 
-  } else if (event->type == SDL_EVENT_KEY_UP) {
-    if (event->key.key == SDLK_UP) {
-      g_up = 0;
-    } else if (event->key.key == SDLK_DOWN) {
-      g_down = 0;
-    }
   } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
              event->button.button == SDL_BUTTON_LEFT && browser_is_open()) {
     BrowserLayout layout;

@@ -20,12 +20,6 @@ void draw(void) {
   stroke(color(255, 255, 255));
   strokeWeight(1);
 
-  if (buttonDown()) {
-    noFill();
-  } else if (buttonUp()) {
-    fill(color(255, 255, 255));
-  }
-
   for (i = 0; i < 3; i++) {
     float a = spin - TAU * (float)i / 3.f;
     vx[i] = cx + cosf(a) * radius;

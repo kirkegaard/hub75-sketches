@@ -1,7 +1,6 @@
 #include "hub75.h"
 
 #include "graphics.h"
-#include "input.h"
 
 #include <time.h>
 
@@ -33,7 +32,3 @@ unsigned long millis(void) {
   }
   return (unsigned long)ms;
 }
-
-int buttonUp(void) { return sim_button_up(); }
-
-int buttonDown(void) { return sim_button_down(); }

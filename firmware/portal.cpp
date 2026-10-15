@@ -1,12 +1,11 @@
 #include <Adafruit_Protomatter.h>
 #include <Arduino.h>
 
-#include <string.h>
-
 #include "pins.h"
 #include "portal.h"
 
 extern "C" {
+#include "brightness.h"
 #include "graphics.h"
 #include "hub75.h"
 }
@@ -114,7 +113,9 @@ extern "C" int portal_begin(int w, int h) {
 extern "C" void portal_present(void) {
   uint16_t *dst;
   const uint16_t *src;
+  int brightness;
   size_t n;
+  size_t i;
 
   if (!matrix) {
     return;
@@ -125,12 +126,21 @@ extern "C" void portal_present(void) {
     return;
   }
   n = (size_t)width * (size_t)height;
-  memcpy(dst, src, n * sizeof(uint16_t));
+  brightness = hub75_brightness();
+  for (i = 0; i < n; i++) {
+    dst[i] = hub75_dim565(src[i], brightness);
+  }
   matrix->show();
 }
 
-extern "C" int buttonUp(void) { return digitalRead(HUB75_BUTTON_UP) == LOW; }
+extern "C" int portal_button_up(void) {
+  return digitalRead(HUB75_BUTTON_UP) == LOW;
+}
 
-extern "C" int buttonDown(void) {
+extern "C" int portal_button_down(void) {
   return digitalRead(HUB75_BUTTON_DOWN) == LOW;
 }
+
+extern "C" void portal_brightness_up(void) { hub75_brightness_up(); }
+
+extern "C" void portal_brightness_down(void) { hub75_brightness_down(); }

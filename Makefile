@@ -39,6 +39,7 @@ UTIL_HEADERS := include/util.h $(wildcard include/util/*.h)
 OBJS = \
 	$(BUILD)/graphics.o \
 	$(BUILD)/runtime.o \
+	$(BUILD)/brightness.o \
 	$(BUILD)/panel.o \
 	$(BUILD)/ppm.o \
 	$(BUILD)/input.o \
@@ -80,13 +81,16 @@ $(BUILD):
 $(BUILD)/graphics.o: src/graphics.c include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/graphics.c -o $@
 
-$(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h sim/input.h | $(BUILD)
+$(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c src/runtime.c -o $@
 
-$(BUILD)/panel.o: sim/panel.c sim/panel.h | $(BUILD)
+$(BUILD)/brightness.o: src/brightness.c src/brightness.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/brightness.c -o $@
+
+$(BUILD)/panel.o: sim/panel.c sim/panel.h src/brightness.h | $(BUILD)
 	$(CC) $(CFLAGS) -c sim/panel.c -o $@
 
-$(BUILD)/input.o: sim/input.c sim/input.h sim/panel.h sim/browser.h include/hub75.h | $(BUILD)
+$(BUILD)/input.o: sim/input.c sim/input.h sim/panel.h sim/browser.h src/brightness.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/input.c -o $@
 
 $(BUILD)/ppm.o: sim/ppm.c sim/ppm.h | $(BUILD)
@@ -95,7 +99,7 @@ $(BUILD)/ppm.o: sim/ppm.c sim/ppm.h | $(BUILD)
 $(BUILD)/main-$(SKETCH).o: sim/main.c include/hub75.h src/graphics.h src/runtime.h sim/panel.h sim/ppm.h sim/window.h sim/browser.h | $(BUILD)
 	$(CC) $(CFLAGS) -DHUB75_SKETCH_NAME=\"$(SKETCH)\" -c sim/main.c -o $@
 
-$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h sim/browser.h sim/font5x7.h | $(BUILD)
+$(BUILD)/window.o: sim/window.c sim/window.h sim/panel.h sim/input.h include/hub75.h src/graphics.h src/brightness.h sim/browser.h sim/font5x7.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c sim/window.c -o $@
 
 $(BUILD)/browser.o: sim/browser.c sim/browser.h include/hub75.h src/graphics.h sim/font5x7.h | $(BUILD)
@@ -168,10 +172,10 @@ firmware: check-sketch
 		echo "That also installs Adafruit GFX, which Protomatter requires."; \
 		exit 1; \
 	fi; \
-	stage="$(BUILD)/firmware-sketch"; \
+	stage="$(BUILD)/sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h include/util.h src/graphics.h src/graphics.c "$$stage/"; \
+	cp include/hub75.h include/util.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c "$$stage/"; \
 	mkdir -p "$$stage/util"; \
 	cp include/util/*.h "$$stage/util/"; \
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \

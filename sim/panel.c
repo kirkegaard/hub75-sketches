@@ -1,5 +1,7 @@
 #include "panel.h"
 
+#include "brightness.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +159,7 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
   float radius;
   float r2;
   float center;
+  int brightness;
 
   const uint8_t gap_r = 6;
   const uint8_t gap_g = 6;
@@ -178,6 +181,7 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
   radius = (float)diameter * 0.5f;
   r2 = radius * radius;
   center = (float)(cell - 1) * 0.5f;
+  brightness = hub75_brightness();
 
   for (y = 0; y < img_h; y++) {
     int ly = y % cell;
@@ -203,9 +207,9 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
           px[1] = off_g;
           px[2] = off_b;
         } else {
-          px[0] = r;
-          px[1] = g;
-          px[2] = b;
+          px[0] = hub75_dim8(r, brightness);
+          px[1] = hub75_dim8(g, brightness);
+          px[2] = hub75_dim8(b, brightness);
         }
       } else {
         px[0] = gap_r;

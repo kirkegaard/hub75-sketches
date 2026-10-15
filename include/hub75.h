@@ -17,11 +17,6 @@ extern unsigned long frameCount;
 /* Milliseconds since the panel runtime started. */
 unsigned long millis(void);
 
-/* Matrix Portal S3 user buttons: 1 pressed, 0 released.
-   The simulator maps the up and down arrow keys. A headless dump reads 0. */
-int buttonUp(void);
-int buttonDown(void);
-
 /* Pack 8-bit channels into RGB565 (5/6/5). */
 uint16_t color(uint8_t r, uint8_t g, uint8_t b);
 
@@ -53,8 +48,13 @@ void circle(int cx, int cy, int d);
 void triangle(float x0, float y0, float x1, float y1, float x2, float y2);
 void polygon(int cx, int cy, float radius, int sides, float rotation);
 
+#ifndef __cplusplus
+/* The simulator's C entry points. A C++ translation unit (the Arduino
+   firmware) already has setup()/draw() declared by Arduino.h, and those
+   use C++ linkage, so declaring them here would conflict. */
 void setup(void);
 void draw(void);
+#endif
 
 #ifdef __cplusplus
 }

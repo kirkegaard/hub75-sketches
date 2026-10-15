@@ -3,6 +3,7 @@
 #include <SDL3/SDL_main.h>
 
 #include "browser.h"
+#include "brightness.h"
 #include "font5x7.h"
 #include "graphics.h"
 #include "hub75.h"
@@ -136,8 +137,9 @@ static void refresh_title(View *v) {
 
   if (sketch) {
     char buf[128];
-    snprintf(buf, sizeof buf, "%s  %dx%d", sketch->name, v->panel->matrix_w,
-             v->panel->matrix_h);
+    int percent = (hub75_brightness() * 100 + 127) / 255;
+    snprintf(buf, sizeof buf, "%s  %dx%d  %d%%", sketch->name,
+             v->panel->matrix_w, v->panel->matrix_h, percent);
     SDL_SetWindowTitle(v->window, buf);
   }
 }
