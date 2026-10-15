@@ -25,16 +25,30 @@ That builds `build/hub75-<sketch>` (for the default, `build/hub75-drift`) and op
 
 The simulator links every file in `sketches/`. Press `b` to open a small browser in the top right, use the up and down arrow keys (or the mouse) to pick a sketch, and enter to load it. The left and right arrow keys jump straight to the previous or next sketch. While the browser is closed the up and down arrow keys dim and brighten the panel; when it is open they move the list instead. The window title shows the current level. Press `s` to cycle the lit LED shape between a circle and a square, `r` to reset the running sketch (like the board's reset button), and `p` to pause the sketch.
 
-`make sim` also accepts the sketch, the LED count, and the pitch:
+`make sim` also accepts the sketch, the LED count, the pitch, the rotation, and the starting brightness:
 
 ```sh
 make sim SKETCH=lattice
 make sim SKETCH=steps WIDTH=64 HEIGHT=32
 make sim SKETCH=drift PITCH=P4
 make sim SKETCH=lattice WIDTH=64 HEIGHT=32 PITCH=P2.5
+make sim SKETCH=textwave WIDTH=128 HEIGHT=64 ROTATE=90
+make sim SKETCH=drift BRIGHTNESS=64
 ```
 
-`WIDTH` and `HEIGHT` are LED counts. Typical panels step by 32 (32, 64, 128). The default is 128—64.
+`WIDTH` and `HEIGHT` are the panel's electrical LED counts (columns by rows). Typical panels step by 32 (32, 64, 128) and are 16, 32, or 64 rows tall. The default is 128—64.
+
+### Brightness
+
+`BRIGHTNESS` is the level the panel starts at, `0` (off) to `255` (full, the default). The up and down keys in the simulator (and the buttons on the board) step it from there, so `BRIGHTNESS` just picks the starting point instead of always starting at full. `make firmware` rejects values outside 0—255.
+
+### Rotation
+
+A panel can be mounted turned on its side. `ROTATE` spins the sketch's view on the panel: `0`, `90`, `180`, or `270` (`0` by default). The panel keeps its electrical `WIDTH`—`HEIGHT`; `90` and `270` swap `width` and `height` inside the sketch, and `180` leaves them alone. A 128—64 panel with `ROTATE=90` gives a sketch a 64—128 portrait canvas, and the simulator opens a 64—128 window so the preview matches the board.
+
+Which of `90` and `270` you want depends on the direction you turned the panel: if the picture comes out upside down, use the other one.
+
+`HEIGHT` is capped at 64 on the board (see below), so a portrait panel uses `ROTATE`, not a taller `HEIGHT`. `make firmware WIDTH=64 HEIGHT=128` is a build error and points at the rotated form.
 
 ### Pitch
 
@@ -110,10 +124,11 @@ The window and the firmware both step one frame every 33 ms, so a sketch paced o
 
 ## Firmware
 
-Board: Adafruit Matrix Portal S3 (ESP32-S3, 8 MB flash, 2 MB RAM), one HUB75 panel. WiFi, BLE, and the LIS3DH are out of scope. The up and down buttons dim and brighten the panel.
+Board: Adafruit Matrix Portal S3 (ESP32-S3, 8 MB flash, 2 MB RAM), one HUB75 panel. WiFi, BLE, and the LIS3DH are out of scope. The up and down buttons dim and brighten the panel, starting from `BRIGHTNESS` (255 if unset).
 
 ```sh
 make firmware SKETCH=drift WIDTH=128 HEIGHT=64
+make firmware SKETCH=drift BRIGHTNESS=64
 ```
 
 This needs `arduino-cli`, the Espressif ESP32 core (it contains the Matrix Portal S3 board), and Adafruit Protomatter. Adafruit GFX comes in with Protomatter. If any of that is missing, `make firmware` prints the install commands and exits. The simulator does not use them.
@@ -135,7 +150,7 @@ Flash after the board is on USB-C. `arduino-cli board list` prints the port.
 make flash PORT=/dev/cu.usbmodem1101 SKETCH=drift
 ```
 
-`HEIGHT` must be 16, 32, or 64 so the address line count is 3, 4, or 5. A 64-row panel uses address E. Protomatter is asked for 4-bit color and a double buffer first. If `begin()` fails (usually DMA RAM), the build falls back to a single buffer, then to 4-bit's smaller cousin, depth 3. Each frame is copied from the sketch's RGB565 buffer into Protomatter's canvas and `show()` pushes it. The C++ is only `firmware/portal.cpp`. Sketch `setup` / `draw` stay C; the firmware build renames those two symbols so they do not collide with Arduino's `setup`.
+`HEIGHT` must be 16, 32, or 64 so the address line count is 3, 4, or 5; a build with any other `HEIGHT` stops with a note to use `ROTATE` instead. `ROTATE` (0, 90, 180, or 270) turns the sketch's view on the panel, so a rotated 128—64 panel shows a 64—128 canvas. A 64-row panel uses address E. Protomatter is asked for 4-bit color and a double buffer first. If `begin()` fails (usually DMA RAM), the build falls back to a single buffer, then to 4-bit's smaller cousin, depth 3. Each frame is copied from the sketch's RGB565 buffer into Protomatter's canvas, reoriented for `ROTATE`, and `show()` pushes it. The C++ is only `firmware/portal.cpp`. Sketch `setup` / `draw` stay C; the firmware build renames those two symbols so they do not collide with Arduino's `setup`.
 
 ### Pin map
 

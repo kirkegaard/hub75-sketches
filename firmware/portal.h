@@ -6,8 +6,11 @@ extern "C" {
 #endif
 
 /* Start Protomatter and the shared RGB565 framebuffer.
+   w x h is the physical panel (Protomatter's canvas), so h is 16, 32, or
+   64. rotate is 0, 90, 180, or 270: the sketch's width x height view is
+   the panel turned by that many degrees, so 90 and 270 swap them.
    Returns 1 on success, 0 on failure. */
-int portal_begin(int w, int h);
+int portal_begin(int w, int h, int rotate);
 
 /* Copy the sketch framebuffer and refresh the panel, dimmed to the
    current brightness. */

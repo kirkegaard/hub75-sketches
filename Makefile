@@ -2,6 +2,8 @@ SKETCH ?= drift
 WIDTH ?= 128
 HEIGHT ?= 64
 PITCH ?= P1
+ROTATE ?= 0
+BRIGHTNESS ?= 255
 ARGS ?=
 
 FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
@@ -50,10 +52,10 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl clean
+.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness clean
 
 sim: check-sketch check-sdl $(TARGET)
-	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) $(ARGS)
+	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) --rotate $(ROTATE) --brightness $(BRIGHTNESS) $(ARGS)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(SDL_LIBS) -lm
@@ -74,6 +76,36 @@ check-sketch:
 		ls sketches/*.c; \
 		exit 1; \
 	}
+
+check-rotate:
+	@case "$(ROTATE)" in \
+		0|90|180|270) ;; \
+		*) echo "error: ROTATE must be 0, 90, 180, or 270 (got $(ROTATE))"; \
+		   exit 1 ;; \
+	esac
+
+# A single HUB75 panel tops out at 64 rows because Protomatter infers the
+# height from the address lines (2 << addrCount, addrCount 1..5). A
+# physically rotated panel wants ROTATE, not a taller HEIGHT.
+check-rows:
+	@case "$(HEIGHT)" in \
+		16|32|64) ;; \
+		*) echo "error: HEIGHT must be 16, 32, or 64 (got $(HEIGHT))."; \
+		   echo "A single HUB75 panel cannot be taller than 64 rows."; \
+		   echo "For a portrait image on a rotated 128x64 panel:"; \
+		   echo "  make flash PORT=... WIDTH=128 HEIGHT=64 ROTATE=90"; \
+		   exit 1 ;; \
+	esac
+
+check-brightness:
+	@case "$(BRIGHTNESS)" in \
+		''|*[!0-9]*) echo "error: BRIGHTNESS must be an integer from 0 to 255 (got $(BRIGHTNESS))"; \
+		   exit 1 ;; \
+	esac; \
+	if [ "$(BRIGHTNESS)" -gt 255 ]; then \
+		echo "error: BRIGHTNESS must be an integer from 0 to 255 (got $(BRIGHTNESS))"; \
+		exit 1; \
+	fi
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -135,7 +167,7 @@ $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 $(BUILD)/sk-%.o: sketches/%.c include/hub75.h $(UTIL_HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
-firmware: check-sketch
+firmware: check-sketch check-rotate check-rows check-brightness
 	@cli="$(ARDUINO_CLI)"; \
 	fqbn="$(FQBN)"; \
 	if [ ! -x "$$cli" ]; then \
@@ -181,9 +213,9 @@ firmware: check-sketch
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \
-	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n' \
-		"$(WIDTH)" "$(HEIGHT)" > "$$stage/config.h"; \
-	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT))"; \
+	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n' \
+		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" > "$$stage/config.h"; \
+	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS))"; \
 	"$$cli" compile --fqbn "$$fqbn" --output-dir "$(BUILD)/firmware-out" "$$stage"
 
 flash: firmware

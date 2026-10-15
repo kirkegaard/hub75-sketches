@@ -3,6 +3,8 @@
 #include "config.h"
 #include "portal.h"
 
+#include "brightness.h"
+
 extern "C" {
 extern unsigned long frameCount;
 void hub75_setup(void);
@@ -33,12 +35,13 @@ static void poll_brightness(void) {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  if (!portal_begin(HUB75_PANEL_WIDTH, HUB75_PANEL_HEIGHT)) {
+  if (!portal_begin(HUB75_PANEL_WIDTH, HUB75_PANEL_HEIGHT, HUB75_ROTATE)) {
     Serial.println("HUB75 start failed");
     for (;;) {
       delay(1000);
     }
   }
+  hub75_brightness_set(HUB75_BRIGHTNESS);
   hub75_setup();
 }
 
