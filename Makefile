@@ -6,6 +6,7 @@ ROTATE ?= 0
 BRIGHTNESS ?= 255
 SATURATION ?= 100
 GAMMA ?= 1.0
+DEPTH ?= 4
 ARGS ?=
 
 FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
@@ -55,7 +56,7 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness check-color clean
+.PHONY: sim firmware flash check-sketch check-sdl check-rotate check-rows check-brightness check-color check-depth clean
 
 sim: check-sketch check-sdl $(TARGET)
 	./$(TARGET) --width $(WIDTH) --height $(HEIGHT) --pitch $(PITCH) --rotate $(ROTATE) --brightness $(BRIGHTNESS) $(ARGS)
@@ -109,6 +110,13 @@ check-brightness:
 		echo "error: BRIGHTNESS must be an integer from 0 to 255 (got $(BRIGHTNESS))"; \
 		exit 1; \
 	fi
+
+check-depth:
+	@case "$(DEPTH)" in \
+		3|4|5|6) ;; \
+		*) echo "error: DEPTH must be 3, 4, 5, or 6 (got $(DEPTH))"; \
+		   exit 1 ;; \
+	esac
 
 check-color:
 	@case "$(SATURATION)" in \
@@ -187,7 +195,7 @@ $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 $(BUILD)/sk-%.o: sketches/%.c include/hub75.h $(UTIL_HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
-firmware: check-sketch check-rotate check-rows check-brightness check-color
+firmware: check-sketch check-rotate check-rows check-brightness check-color check-depth
 	@cli="$(ARDUINO_CLI)"; \
 	fqbn="$(FQBN)"; \
 	if [ ! -x "$$cli" ]; then \
@@ -233,9 +241,9 @@ firmware: check-sketch check-rotate check-rows check-brightness check-color
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \
-	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n#define HUB75_SATURATION %s\n#define HUB75_GAMMA %sf\n' \
-		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" "$(SATURATION)" "$(GAMMA)" > "$$stage/config.h"; \
-	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA))"; \
+	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n#define HUB75_SATURATION %s\n#define HUB75_GAMMA %sf\n#define HUB75_DEPTH %s\n' \
+		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" "$(SATURATION)" "$(GAMMA)" "$(DEPTH)" > "$$stage/config.h"; \
+	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA) depth $(DEPTH))"; \
 	"$$cli" compile --fqbn "$$fqbn" --output-dir "$(BUILD)/firmware-out" "$$stage"
 
 flash: firmware

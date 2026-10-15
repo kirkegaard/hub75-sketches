@@ -1,6 +1,7 @@
 #include <Adafruit_Protomatter.h>
 #include <Arduino.h>
 
+#include "config.h"
 #include "pins.h"
 #include "portal.h"
 
@@ -13,6 +14,46 @@ extern "C" {
 
 static Adafruit_Protomatter *matrix = NULL;
 static int matrix_started = 0;
+
+/* The color depth begin() actually got. */
+static int matrix_depth = 0;
+
+/* Ordered 4x4 Bayer thresholds, 0..15. */
+static const uint8_t kDither[16] = {0, 8,  2,  10, 12, 4, 14, 6,
+                                    3, 11, 1,  9,  15, 7, 13, 5};
+
+/* The panel keeps only the top panel_bits of a channel's field, which is
+   what makes a gray ramp band. Dither the dropped low bits across a 4x4
+   tile: a pixel rounds up when the Bayer threshold falls under its
+   fraction, so the tile averages to the level in between. Spatial only,
+   so a still image does not shimmer. field_bits is 5 for red and blue, 6
+   for green. */
+static uint8_t dither_field(uint8_t v8, int panel_bits, int field_bits,
+                            int t) {
+  int drop = field_bits - panel_bits;
+  int vf;
+  int level;
+  int frac;
+  int max;
+  int thr;
+
+  if (drop <= 0) {
+    return (uint8_t)(v8 >> (8 - field_bits));
+  }
+
+  vf = v8 >> (8 - field_bits);
+  level = vf >> drop;
+  frac = vf & ((1 << drop) - 1);
+  max = (1 << panel_bits) - 1;
+  thr = (t * (1 << drop)) >> 4;
+  if (thr < frac) {
+    level++;
+  }
+  if (level > max) {
+    level = max;
+  }
+  return (uint8_t)(level << drop);
+}
 
 /* The physical panel width (Protomatter's canvas stride) and how the
    sketch framebuffer is rotated onto the panel. A rotated panel keeps
@@ -83,6 +124,7 @@ static int try_begin(int w, int h, int addrs, uint8_t depth,
   }
 
   matrix_started = 1;
+  matrix_depth = depth;
 
   if (matrix->width() != w || matrix->height() != h) {
     Serial.printf("protomatter reported %d x %d, wanted %d x %d\n",
@@ -101,8 +143,7 @@ extern "C" int portal_begin(int w, int h, int rotate) {
   int addrs;
   int lw;
   int lh;
-  static const uint8_t depths[] = {4, 3};
-  size_t i;
+  int depth;
   int ok = 0;
 
   if (rotate != 0 && rotate != 90 && rotate != 180 && rotate != 270) {
@@ -121,9 +162,12 @@ extern "C" int portal_begin(int w, int h, int rotate) {
   pinMode(HUB75_BUTTON_UP, INPUT_PULLUP);
   pinMode(HUB75_BUTTON_DOWN, INPUT_PULLUP);
 
-  for (i = 0; i < sizeof depths / sizeof depths[0] && !ok; i++) {
-    if (try_begin(w, h, addrs, depths[i], true) ||
-        try_begin(w, h, addrs, depths[i], false)) {
+  /* Start at the requested depth and step down until one starts. More
+     bitplanes give more levels but refresh slower. */
+  for (depth = HUB75_DEPTH > 6 ? 6 : HUB75_DEPTH; depth >= 3 && !ok;
+       depth--) {
+    if (try_begin(w, h, addrs, (uint8_t)depth, true) ||
+        try_begin(w, h, addrs, (uint8_t)depth, false)) {
       ok = 1;
     }
   }
@@ -154,6 +198,9 @@ extern "C" void portal_present(void) {
   uint16_t *dst;
   const uint16_t *src;
   int brightness;
+  int panel_r;
+  int panel_g;
+  int panel_b;
   int lx;
   int ly;
 
@@ -170,10 +217,23 @@ extern "C" void portal_present(void) {
 
   brightness = hub75_brightness();
 
+  /* Protomatter keeps only the top matrix_depth bits of each 5/6/5 field. */
+  panel_r = matrix_depth < 5 ? matrix_depth : 5;
+  panel_g = matrix_depth < 6 ? matrix_depth : 6;
+  panel_b = matrix_depth < 5 ? matrix_depth : 5;
+
   for (ly = 0; ly < height; ly++) {
     for (lx = 0; lx < width; lx++) {
       int ex;
       int ey;
+      uint16_t c;
+      uint8_t r8;
+      uint8_t g8;
+      uint8_t b8;
+      uint8_t r5;
+      uint8_t g6;
+      uint8_t b5;
+      int t;
 
       switch (rotation) {
       case 90:
@@ -194,15 +254,32 @@ extern "C" void portal_present(void) {
         break;
       }
 
-      dst[(size_t)ey * (size_t)phys_w + (size_t)ex] = hub75_dim565(
+      c = hub75_dim565(
           hub75_correct565(src[(size_t)ly * (size_t)width + (size_t)lx]),
           brightness);
+
+      /* Expand to 8-bit the way the simulator does, dither the bits the
+         panel drops, and repack. */
+      r8 = (uint8_t)((c >> 11) & 0x1Fu);
+      g8 = (uint8_t)((c >> 5) & 0x3Fu);
+      b8 = (uint8_t)(c & 0x1Fu);
+      r8 = (uint8_t)((r8 << 3) | (r8 >> 2));
+      g8 = (uint8_t)((g8 << 2) | (g8 >> 4));
+      b8 = (uint8_t)((b8 << 3) | (b8 >> 2));
+
+      t = kDither[((ey & 3) << 2) | (ex & 3)];
+
+      r5 = dither_field(r8, panel_r, 5, t);
+      g6 = dither_field(g8, panel_g, 6, t);
+      b5 = dither_field(b8, panel_b, 5, t);
+
+      dst[(size_t)ey * (size_t)phys_w + (size_t)ex] =
+          (uint16_t)((r5 << 11) | (g6 << 5) | b5);
     }
   }
 
   matrix->show();
 }
-
 extern "C" int portal_button_up(void) {
   return digitalRead(HUB75_BUTTON_UP) == LOW;
 }
