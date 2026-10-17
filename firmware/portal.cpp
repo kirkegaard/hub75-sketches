@@ -19,8 +19,8 @@ static int matrix_started = 0;
 static int matrix_depth = 0;
 
 /* Ordered 4x4 Bayer thresholds, 0..15. */
-static const uint8_t kDither[16] = {0, 8,  2,  10, 12, 4, 14, 6,
-                                    3, 11, 1,  9,  15, 7, 13, 5};
+static const uint8_t kDither[16] = {0, 8,  2, 10, 12, 4, 14, 6,
+                                    3, 11, 1, 9,  15, 7, 13, 5};
 
 /* The panel keeps only the top panel_bits of a channel's field, which is
    what makes a gray ramp band. Dither the dropped low bits across a 4x4
@@ -28,8 +28,7 @@ static const uint8_t kDither[16] = {0, 8,  2,  10, 12, 4, 14, 6,
    fraction, so the tile averages to the level in between. Spatial only,
    so a still image does not shimmer. field_bits is 5 for red and blue, 6
    for green. */
-static uint8_t dither_field(uint8_t v8, int panel_bits, int field_bits,
-                            int t) {
+static uint8_t dither_field(uint8_t v8, int panel_bits, int field_bits, int t) {
   int drop = field_bits - panel_bits;
   int vf;
   int level;
@@ -46,12 +45,15 @@ static uint8_t dither_field(uint8_t v8, int panel_bits, int field_bits,
   frac = vf & ((1 << drop) - 1);
   max = (1 << panel_bits) - 1;
   thr = (t * (1 << drop)) >> 4;
+
   if (thr < frac) {
     level++;
   }
+
   if (level > max) {
     level = max;
   }
+
   return (uint8_t)(level << drop);
 }
 
@@ -108,6 +110,7 @@ static int try_begin(int w, int h, int addrs, uint8_t depth,
   matrix = new Adafruit_Protomatter((uint16_t)w, depth, 1, rgb_pins,
                                     (uint8_t)addrs, addr_pins, HUB75_CLK,
                                     HUB75_LAT, HUB75_OE, double_buffer);
+
   if (!matrix) {
     return 0;
   }
@@ -159,13 +162,14 @@ extern "C" int portal_begin(int w, int h, int rotate) {
     return 0;
   }
 
+#if HUB75_HAS_BUTTONS
   pinMode(HUB75_BUTTON_UP, INPUT_PULLUP);
   pinMode(HUB75_BUTTON_DOWN, INPUT_PULLUP);
+#endif
 
   /* Start at the requested depth and step down until one starts. More
      bitplanes give more levels but refresh slower. */
-  for (depth = HUB75_DEPTH > 6 ? 6 : HUB75_DEPTH; depth >= 3 && !ok;
-       depth--) {
+  for (depth = HUB75_DEPTH > 6 ? 6 : HUB75_DEPTH; depth >= 3 && !ok; depth--) {
     if (try_begin(w, h, addrs, (uint8_t)depth, true) ||
         try_begin(w, h, addrs, (uint8_t)depth, false)) {
       ok = 1;
@@ -281,11 +285,19 @@ extern "C" void portal_present(void) {
   matrix->show();
 }
 extern "C" int portal_button_up(void) {
+#if HUB75_HAS_BUTTONS
   return digitalRead(HUB75_BUTTON_UP) == LOW;
+#else
+  return 0;
+#endif
 }
 
 extern "C" int portal_button_down(void) {
+#if HUB75_HAS_BUTTONS
   return digitalRead(HUB75_BUTTON_DOWN) == LOW;
+#else
+  return 0;
+#endif
 }
 
 extern "C" void portal_brightness_up(void) { hub75_brightness_up(); }

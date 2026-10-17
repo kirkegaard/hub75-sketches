@@ -1,28 +1,45 @@
 #ifndef HUB75_PINS_H
 #define HUB75_PINS_H
 
-/* Matrix Portal S3 HUB75 wiring.
-   Looked up, not guessed:
+/* HUB75 pin maps, chosen by BOARD= on the make command line:
 
-   CircuitPython board pins
-     ports/espressif/boards/adafruit_matrixportal_s3/pins.c
-     MTX_R1..MTX_B2, MTX_ADDRA..MTX_ADDRE, MTX_CLK, MTX_LAT, MTX_OE
+     adafruit   Adafruit Matrix Portal S3 (default)
+     waveshare  Waveshare ESP32-S3-RGB-Matrix
 
-   Adafruit_Protomatter examples/simple/simple.ino
-     the ARDUINO_ADAFRUIT_MATRIXPORTAL_ESP32S3 block
-     rgbPins  {42, 41, 40, 38, 39, 37}
-     addrPins {45, 36, 48, 35, 21}
-     clock 2, latch 47, oe 14
+   The boards wire the panel to different GPIOs, so a build for one shows
+   nothing on the other. HUB75_HAS_BUTTONS is 1 only where the board has
+   up/down brightness buttons. */
 
-   Learn guide "Adafruit MatrixPortal S3 / Pinouts", Address E Line Jumper:
-     the PCB jumper ships closed to HUB75 connector pin 8, which is what
-     Adafruit's own 64-row panels expect. That "8" is the ribbon pin, not
-     an ESP32 GPIO. The GPIO that drives address E is 21 (MTX_ADDRE).
-     GPIO 8 on this board is the RX pad.
+#ifdef HUB75_BOARD_WAVESHARE
 
-   Buttons, same pinout page: up is GPIO 6, down is GPIO 7.
-   Neither has an external pull-up; a press pulls the pin low.
-*/
+/* Waveshare ESP32-S3-RGB-Matrix (ESP32-S3-N32R16).
+   Source: docs.waveshare.com, ESP32-Peripheral-Tutorials/Display/LED-Matrix.
+   No up/down buttons; its GPIO 6 and 7 are HUB75 data (B1 and R2). */
+
+#define HUB75_R1 4
+#define HUB75_G1 5
+#define HUB75_B1 6
+#define HUB75_R2 7
+#define HUB75_G2 15
+#define HUB75_B2 16
+
+#define HUB75_A 18
+#define HUB75_B 8
+#define HUB75_C 3
+#define HUB75_D 42
+#define HUB75_E 9
+
+#define HUB75_CLK 41
+#define HUB75_LAT 40
+#define HUB75_OE 2
+
+#define HUB75_HAS_BUTTONS 0
+
+#else
+
+/* Adafruit Matrix Portal S3.
+   Source: CircuitPython pins.c (MTX_*) and Adafruit_Protomatter simple.ino.
+   Up/down buttons on GPIO 6 and 7, active low, internal pull-ups. */
 
 #define HUB75_R1 42
 #define HUB75_G1 41
@@ -43,5 +60,9 @@
 
 #define HUB75_BUTTON_UP 6
 #define HUB75_BUTTON_DOWN 7
+
+#define HUB75_HAS_BUTTONS 1
+
+#endif
 
 #endif

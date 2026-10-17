@@ -11,8 +11,21 @@ BROWNOUT ?= 1
 NETDEBUG ?= 0
 ARGS ?=
 
-FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
+# BOARD picks the HUB75 pin map (firmware/pins.h) and the matching FQBN.
+# Both are ESP32-S3 boards, but the panel is wired to different GPIOs.
+BOARD ?= adafruit
 PORT ?=
+
+ifeq ($(BOARD),waveshare)
+# Waveshare ESP32-S3-RGB-Matrix: ESP32-S3-N32R16 (32 MB flash, 16 MB
+# octal PSRAM). The board exposes native USB-Serial/JTAG, which the
+# esp32s3 default (USBMode=hwcdc) matches.
+FQBN ?= esp32:esp32:esp32s3:FlashSize=32M,PSRAM=opi
+else
+FQBN ?= esp32:esp32:adafruit_matrixportal_esp32s3
+endif
+
+BOARD_DEFS := $(if $(filter waveshare,$(BOARD)),-DHUB75_BOARD_WAVESHARE=1,)
 
 CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim -I. -Ivendor/yyjson
 
@@ -100,7 +113,7 @@ OBJS = \
 	$(BUILD)/sketch_registry.o \
 	$(SKETCH_OBJS)
 
-.PHONY: sim firmware flash secrets monitor check-sketch check-sdl check-rotate check-rows check-brightness check-color check-depth clean
+.PHONY: sim firmware flash secrets monitor check-sketch check-sdl check-board check-rotate check-rows check-brightness check-color check-depth clean
 
 # Copy the credential template into place once. secrets.h is gitignored.
 secrets:
@@ -133,6 +146,13 @@ check-sketch:
 		ls sketches/*.c; \
 		exit 1; \
 	}
+
+check-board:
+	@case "$(BOARD)" in \
+		adafruit|waveshare) ;; \
+		*) echo "error: BOARD must be adafruit or waveshare (got $(BOARD))"; \
+		   exit 1 ;; \
+	esac
 
 check-rotate:
 	@case "$(ROTATE)" in \
@@ -267,7 +287,7 @@ $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 $(BUILD)/sk-%.o: sketches/%.c include/hub75.h include/net.h include/ws.h include/netdebug.h vendor/yyjson/yyjson.h $(UTIL_HEADERS) $(SECRETS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
-firmware: check-sketch check-rotate check-rows check-brightness check-color check-depth
+firmware: check-sketch check-board check-rotate check-rows check-brightness check-color check-depth
 	@cli="$(ARDUINO_CLI)"; \
 	fqbn="$(FQBN)"; \
 	if [ ! -x "$$cli" ]; then \
@@ -317,8 +337,8 @@ firmware: check-sketch check-rotate check-rows check-brightness check-color chec
 	cp sketches/$(SKETCH).c "$$stage/sketch_user.inc"; \
 	printf '#pragma once\n#define HUB75_PANEL_WIDTH %s\n#define HUB75_PANEL_HEIGHT %s\n#define HUB75_ROTATE %s\n#define HUB75_BRIGHTNESS %s\n#define HUB75_SATURATION %s\n#define HUB75_GAMMA %sf\n#define HUB75_DEPTH %s\n' \
 		"$(WIDTH)" "$(HEIGHT)" "$(ROTATE)" "$(BRIGHTNESS)" "$(SATURATION)" "$(GAMMA)" "$(DEPTH)" > "$$stage/config.h"; \
-	echo "compiling $(SKETCH) for $$fqbn ($(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA) depth $(DEPTH))"; \
-	"$$cli" compile --fqbn "$$fqbn" --build-property "compiler.c.extra_flags=$(YYJSON_DEFS) -DHUB75_FIRMWARE=1 $(NETDEBUG_DEFS)" --build-property "compiler.cpp.extra_flags=$(BROWNOUT_DEFS) $(NETDEBUG_DEFS)" --output-dir "$(BUILD)/firmware-out" "$$stage"
+	echo "compiling $(SKETCH) for $$fqbn (board $(BOARD) $(WIDTH)x$(HEIGHT) rot $(ROTATE) bri $(BRIGHTNESS) sat $(SATURATION) gam $(GAMMA) depth $(DEPTH))"; \
+	"$$cli" compile --fqbn "$$fqbn" --build-property "compiler.c.extra_flags=$(YYJSON_DEFS) -DHUB75_FIRMWARE=1 $(NETDEBUG_DEFS) $(BOARD_DEFS)" --build-property "compiler.cpp.extra_flags=$(BROWNOUT_DEFS) $(NETDEBUG_DEFS) $(BOARD_DEFS)" --output-dir "$(BUILD)/firmware-out" "$$stage"
 
 # Follow the board's Serial output at 115200 (net status, fetch results).
 monitor:
