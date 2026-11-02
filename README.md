@@ -68,7 +68,7 @@ API (`include/hub75.h`):
 - `background`, `fill`/`noFill`, `stroke`/`noStroke`, `strokeWeight`
 - `point`, `line`, `rect(x, y, w, h)`, `circle(x, y, diameter)`, `triangle`, `polygon`
 
-`rect` takes the top-left corner and size; `circle` takes the center and diameter. `include/util.h` adds math, easing, hashes, and an RNG; `include/util/font3x5.h` is a 3x5 microfont. The simulator and firmware both step one frame every 33 ms.
+`rect` takes the top-left corner and size; `circle` takes the center and diameter. `include/util.h` adds math, easing, hashes, an RNG, and `Vec2`/`Vec3` value types (`include/util/vector.h`); `include/util/font3x5.h` is a 3x5 microfont. The simulator and firmware both step one frame every 33 ms.
 
 ## Network
 

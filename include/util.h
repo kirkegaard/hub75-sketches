@@ -10,6 +10,7 @@
 #include "util/hash.h"
 #include "util/interp.h"
 #include "util/rand.h"
+#include "util/vector.h"
 // IWYU pragma: end_exports
 
 #endif

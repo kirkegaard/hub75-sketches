@@ -324,35 +324,40 @@ void polygon(int cx, int cy, float radius, int sides, float rotation) {
 }
 
 void circle(int cx, int cy, int d) {
-  int r;
-  int r2;
-  int inner;
-  int inner2;
+  float outer;
+  float outer2;
+  float inner;
+  float inner2;
+  int reach;
+  int solid;
   int y;
   int x;
 
   if (d <= 0) {
     return;
   }
-  r = d / 2;
-  r2 = r * r;
-  inner = r - (stroke_w - 1);
-  if (inner < 0) {
-    inner = 0;
+  outer = (float)d * 0.5f;
+  outer2 = outer * outer;
+  inner = outer - (float)stroke_w;
+  solid = inner <= 0.0f;
+  if (inner < 0.0f) {
+    inner = 0.0f;
   }
   inner2 = inner * inner;
-  for (y = cy - r; y <= cy + r; y++) {
-    for (x = cx - r; x <= cx + r; x++) {
-      int dx = x - cx;
-      int dy = y - cy;
-      int dist = dx * dx + dy * dy;
-      if (dist > r2) {
+  reach = (int)ceilf(outer);
+  for (y = cy - reach; y <= cy + reach; y++) {
+    for (x = cx - reach; x <= cx + reach; x++) {
+      float dx = (float)(x - cx);
+      float dy = (float)(y - cy);
+      float dist = dx * dx + dy * dy;
+
+      if (dist > outer2) {
         continue;
       }
       if (do_fill) {
         put_px(x, y, fill_color);
       }
-      if (do_stroke && dist >= inner2) {
+      if (do_stroke && (solid || dist > inner2)) {
         put_px(x, y, stroke_color);
       }
     }
