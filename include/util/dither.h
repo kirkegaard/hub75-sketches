@@ -16,14 +16,22 @@ static inline int dither_threshold4(int x, int y) {
   return bayer[((y & 3) << 2) | (x & 3)];
 }
 
-/* Dither one 8-bit channel to a palette of 2^bits levels. Returns the
-   chosen level. bits is the panel's channel width (red/blue 5, green 6). */
-static inline int dither_channel(int v, int bits, int threshold) {
-  int levels = 1 << bits;
+/* Dither one 8-bit channel to `levels` evenly spaced levels. threshold
+   runs 0..thresholds-1, so a 4x4 Bayer tile passes thresholds=16 and an
+   8x8 tile passes thresholds=64. Returns the chosen level. */
+static inline int dither_levels_ex(int v, int levels, int threshold,
+                                   int thresholds) {
+  int max;
   int s;
   int base;
   int rem;
 
+  if (levels < 2) {
+    levels = 2;
+  }
+  if (thresholds < 1) {
+    thresholds = 1;
+  }
   if (v < 0) {
     v = 0;
   } else if (v > 255) {
@@ -32,18 +40,30 @@ static inline int dither_channel(int v, int bits, int threshold) {
 
   /* Position on the 0..levels-1 scale, scaled by 255 so the fraction is
      exact: the levels are not a whole-number step of 8 in 8-bit terms. */
-  s = v * (levels - 1);
+  max = levels - 1;
+  s = v * max;
   base = s / 255;
   rem = s % 255;
 
-  /* Round up when the fraction beats this pixel's 0..15 threshold. */
-  if (rem * 16 > threshold * 255 + 127) {
+  /* Round up when the fraction beats this pixel's threshold. */
+  if ((long)rem * thresholds > (long)threshold * 255 + 127) {
     base++;
   }
-  if (base > levels - 1) {
-    base = levels - 1;
+  if (base > max) {
+    base = max;
   }
   return base;
+}
+
+/* The common 4x4 case. */
+static inline int dither_levels(int v, int levels, int threshold) {
+  return dither_levels_ex(v, levels, threshold, 16);
+}
+
+/* Dither one 8-bit channel to a palette of 2^bits levels. Returns the
+   chosen level. bits is the panel's channel width (red/blue 5, green 6). */
+static inline int dither_channel(int v, int bits, int threshold) {
+  return dither_levels(v, 1 << bits, threshold);
 }
 
 /* 8-bit gray to RGB565 with the lost bits dithered into the 4x4 tile. */

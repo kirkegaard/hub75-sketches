@@ -13,10 +13,12 @@
 #define HUB75_LED_OFF_B 30
 
 /* Pitch is the center-to-center spacing. The lit shape inside each cell
-   is separate: a circle or a square, about 70% of the pitch. */
+   is separate: a circle or a square about 70% of the pitch, or none to
+   fill the whole cell with the LED color and no dot overlay. */
 typedef enum Hub75LedShape {
   HUB75_LED_CIRCLE = 0,
-  HUB75_LED_SQUARE = 1
+  HUB75_LED_SQUARE = 1,
+  HUB75_LED_NONE = 2
 } Hub75LedShape;
 
 typedef struct Hub75Panel {
@@ -46,7 +48,7 @@ int hub75_led_shape_next(int shape);
 int hub75_led_diameter(int cell);
 
 /* Raster lit shapes into rgb. rgb is matrix_w * cell by matrix_h * cell.
-   Off LEDs stay visible as dark shapes. */
+   Off LEDs stay visible as dark shapes unless the shape is none. */
 void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
                        const uint16_t *fb, int matrix_w, int matrix_h);
 

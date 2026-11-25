@@ -126,7 +126,7 @@ int hub75_led_diameter(int cell) {
   return d;
 }
 
-static const char *kShapeNames[] = {"circle", "square"};
+static const char *kShapeNames[] = {"circle", "square", "none"};
 
 int hub75_led_shape_count(void) {
   return (int)(sizeof kShapeNames / sizeof kShapeNames[0]);
@@ -145,6 +145,9 @@ int hub75_led_shape_next(int shape) {
 
 /* Is the point at (dx, dy) inside the lit shape of the given radius? */
 static int led_lit(int shape, float dx, float dy, float radius, float r2) {
+  if (shape == HUB75_LED_NONE) {
+    return 1;
+  }
   if (shape == HUB75_LED_SQUARE) {
     return dx <= radius && dx >= -radius && dy <= radius && dy >= -radius;
   }
@@ -203,9 +206,15 @@ void hub75_leds_render(uint8_t *rgb, int cell, int diameter, int shape,
         expand565(sample, &r, &g, &b);
 
         if (r == 0 && g == 0 && b == 0) {
-          px[0] = off_r;
-          px[1] = off_g;
-          px[2] = off_b;
+          if (shape == HUB75_LED_NONE) {
+            px[0] = 0;
+            px[1] = 0;
+            px[2] = 0;
+          } else {
+            px[0] = off_r;
+            px[1] = off_g;
+            px[2] = off_b;
+          }
         } else {
           px[0] = hub75_dim8(r, brightness);
           px[1] = hub75_dim8(g, brightness);
