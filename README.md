@@ -17,7 +17,7 @@ sudo apt install build-essential libsdl3-dev libcurl4-openssl-dev libssl-dev
 make sim
 ```
 
-Builds and opens `build/hub75-<sketch>` (default `drift`). Keys: `f` fullscreen, `q`/esc quit, `b` sketch browser (up/down or mouse, enter to load; left/right jump), up/down dim/brighten, `s` circle/square, `r` reset, `p` pause.
+Builds and opens `build/hub75-<sketch>` (default `drift`). Keys: `f` fullscreen, `q`/esc quit, `b` sketch browser (up/down or mouse, enter to load; left/right jump), up/down dim/brighten, `s` circle/square/none, `r` reset, `p` pause.
 
 Options, with defaults:
 
@@ -68,7 +68,55 @@ API (`include/hub75.h`):
 - `background`, `fill`/`noFill`, `stroke`/`noStroke`, `strokeWeight`
 - `point`, `line`, `rect(x, y, w, h)`, `circle(x, y, diameter)`, `triangle`, `polygon`
 
-`rect` takes the top-left corner and size; `circle` takes the center and diameter. `include/util.h` adds math, easing, hashes, and an RNG; `include/util/font3x5.h` is a 3x5 microfont. The simulator and firmware both step one frame every 33 ms.
+`rect` takes the top-left corner and size; `circle` takes the center and diameter. `include/util.h` adds math, easing, hashes, an RNG, and `Vec2`/`Vec3` value types (`include/util/vector.h`); `include/util/font3x5.h` is a 3x5 microfont. The simulator and firmware both step one frame every 33 ms.
+
+## Images and filters
+
+`include/image.h` decodes JPEG, PNG, GIF (first frame), and BMP into
+RGBA8888, resizes to the panel, and applies filters. The simulator reads
+paths from the working directory; firmware can use `image_load_memory`
+with an embedded asset.
+
+```c
+#include "hub75.h"
+#include "image.h"
+
+static Image photo;
+
+void setup(void) {
+    image_init(&photo);
+    if (image_load(&photo, "tmp/picture.jpg") != 0) return;
+    image_fit(&photo, width, height, IMAGE_COVER, IMAGE_BOX);
+
+    /* image_dither(image, algorithm, levels, mono)
+       levels 0 = panel 5/6/5, mono 1 = quantize luminance */
+    image_dither(&photo, DITHER_FLOYD_STEINBERG, 0, 0);
+}
+
+void draw(void) {
+    background(color(0, 0, 0));
+    image_draw(&photo, 0, 0);
+}
+```
+
+- `image_resize` and `image_fit` take `IMAGE_NEAREST`, `IMAGE_BILINEAR`, or
+  `IMAGE_BOX`; `image_fit` takes `IMAGE_STRETCH`, `IMAGE_COVER`, or
+  `IMAGE_CONTAIN`.
+- `image_pixels(&photo)` returns the RGBA bytes (the `loadPixels` equivalent).
+- Named filters show their options in the signature: `image_grayscale`,
+  `image_invert`, `image_threshold`, `image_brightness`, `image_contrast`,
+  `image_posterize`, `image_tint`, `image_duotone`, and `image_dither`.
+  `filter(img, FilterOptions)` is the generic form if you prefer one
+  dispatcher.
+- Dither algorithms: Bayer 2/4/8, halftone, 16x16 blue noise,
+  Floyd-Steinberg, Atkinson, Stucki, Burkes, Jarvis, and Sierra Lite.
+- `levels` picks the palette size per channel; `mono = 1` dithers
+  luminance instead. `FILTER_DUOTONE` after a mono dither gives a
+  two-colour palette, the Game Boy look.
+
+`make sim SKETCH=image-dither` loads `tmp/picture.jpg` and cycles the
+algorithms. `HUB75_IMAGE=path` picks another file, `HUB75_MODE=n` starts
+on one, and `HUB75_CYCLE=0` stops the cycle.
 
 ## Network
 
@@ -152,10 +200,12 @@ make firmware SKETCH=drift GAMMA=2.2 SATURATION=85 DEPTH=5
 ## Layout
 
 - `include/hub75.h` — sketch API
+- `include/image.h` — image decode, resize, and filter API
 - `include/net.h`, `include/ws.h` — network and WebSocket sketch APIs
 - `include/util.h`, `include/util/` — shared helpers
-- `src/` — drawing, runtime, brightness, color, WebSocket protocol
+- `src/` — drawing, image pipeline, runtime, brightness, color, WebSocket protocol
 - `sim/` — SDL3 window, raster, browser, net/ws transports, font
 - `firmware/` — pin map, Protomatter wrapper, WiFi/TLS
 - `vendor/yyjson/` — JSON reader (MIT)
+- `vendor/stb/` — image decoder (public domain)
 - `sketches/`, `frames/` — sketches and sample dumps

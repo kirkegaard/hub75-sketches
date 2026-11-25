@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
     snprintf(title, sizeof title, "%s  %dx%d  %s%s", HUB75_SKETCH_NAME, width_arg,
              height_arg, panel.pitch_name, rot);
     fprintf(stderr,
-            "%s  --  b browses sketches, left/right switch, s changes the led "
+            "%s  --  b browses sketches, left/right switch, s cycles the led "
             "shape, r resets, p pauses, up/down dim the panel, f toggles "
             "fullscreen, q or esc closes\n",
             title);

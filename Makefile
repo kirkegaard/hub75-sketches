@@ -27,7 +27,7 @@ endif
 
 BOARD_DEFS := $(if $(filter waveshare,$(BOARD)),-DHUB75_BOARD_WAVESHARE=1,)
 
-CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim -I. -Ivendor/yyjson
+CFLAGS = -std=c11 -Wall -Wextra -O2 -Iinclude -Isrc -Isim -I. -Ivendor/yyjson -Ivendor/stb
 
 # Vendored yyjson, built read-only: sketches only parse responses, so
 # drop the writer. The JSON Pointer utility (yyjson_ptr_get) stays on.
@@ -95,6 +95,7 @@ UTIL_HEADERS := include/util.h $(wildcard include/util/*.h)
 
 OBJS = \
 	$(BUILD)/graphics.o \
+	$(BUILD)/image.o \
 	$(BUILD)/runtime.o \
 	$(BUILD)/brightness.o \
 	$(BUILD)/color.o \
@@ -211,6 +212,9 @@ $(BUILD):
 $(BUILD)/graphics.o: src/graphics.c include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) -c src/graphics.c -o $@
 
+$(BUILD)/image.o: src/image.c include/image.h include/hub75.h src/graphics.h include/util/dither.h include/util/interp.h vendor/stb/stb_image.h | $(BUILD)
+	$(CC) $(CFLAGS) -c src/image.c -o $@
+
 $(BUILD)/runtime.o: src/runtime.c src/runtime.h include/hub75.h src/graphics.h | $(BUILD)
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -c src/runtime.c -o $@
 
@@ -284,7 +288,7 @@ $(BUILD)/sketch_registry.c: sketches/ $(wildcard sketches/*.c) sim/browser.h Mak
 $(BUILD)/sketch_registry.o: $(BUILD)/sketch_registry.c sim/browser.h
 	$(CC) $(CFLAGS) -c $(BUILD)/sketch_registry.c -o $@
 
-$(BUILD)/sk-%.o: sketches/%.c include/hub75.h include/net.h include/ws.h include/netdebug.h vendor/yyjson/yyjson.h $(UTIL_HEADERS) $(SECRETS) Makefile | $(BUILD)
+$(BUILD)/sk-%.o: sketches/%.c include/hub75.h include/image.h include/net.h include/ws.h include/netdebug.h vendor/yyjson/yyjson.h $(UTIL_HEADERS) $(SECRETS) Makefile | $(BUILD)
 	$(CC) $(CFLAGS) -Dsetup=$(subst -,_,$*)_setup -Ddraw=$(subst -,_,$*)_draw -c $< -o $@
 
 firmware: check-sketch check-board check-rotate check-rows check-brightness check-color check-depth
@@ -327,9 +331,10 @@ firmware: check-sketch check-board check-rotate check-rows check-brightness chec
 	stage="$(BUILD)/sketch"; \
 	rm -rf "$$stage"; \
 	mkdir -p "$$stage"; \
-	cp include/hub75.h include/util.h include/net.h include/ws.h include/netdebug.h src/graphics.h src/graphics.c src/brightness.h src/brightness.c src/color.h src/color.c src/ws.c src/netdebug.c "$$stage/"; \
+	cp include/hub75.h include/image.h include/util.h include/net.h include/ws.h include/netdebug.h src/graphics.h src/graphics.c src/image.c src/brightness.h src/brightness.c src/color.h src/color.c src/ws.c src/netdebug.c "$$stage/"; \
 	mkdir -p "$$stage/util"; \
 	cp include/util/*.h "$$stage/util/"; \
+	cp vendor/stb/stb_image.h "$$stage/"; \
 	cp firmware/pins.h firmware/portal.h firmware/portal.cpp firmware/net_fw.cpp firmware/ws_fw.cpp "$$stage/"; \
 	cp firmware/runtime_fw.c firmware/glue.c firmware/sketch.ino "$$stage/"; \
 	cp vendor/yyjson/yyjson.h vendor/yyjson/yyjson.c "$$stage/"; \
